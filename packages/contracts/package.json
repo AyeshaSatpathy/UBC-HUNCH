@@ -1,0 +1,1 @@
+{"name":"@hunch/contracts","private":true,"scripts":{"test":"forge test","build":"forge build"}}
