@@ -1,5 +1,7 @@
 # UBC Hunch
 
+Campus Markets is deployed on Arc testnet at `0x73Dd30B231f405C1DCf0812c64dDCc5F02143D20`. See the [contracts README](packages/contracts/README.md) for deployment details.
+
 Bun workspaces containing an Expo React Native app and a Hono/tRPC API. PostgreSQL stores data through the `postgres` driver and Drizzle ORM. The mobile app imports only the API router type. The notes example is shared public demo data. Authentication and user ownership require product requirements before deployment.
 
 ## Setup
