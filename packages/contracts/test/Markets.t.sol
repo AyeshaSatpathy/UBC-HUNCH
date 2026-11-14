@@ -92,6 +92,133 @@ contract MarketsTest {
         require(before - token.balanceOf(ALICE) == debit);
     }
 
+    function testCampusCreationPublicReadAndRevokedEligibility() public {
+        address unregistered = address(7);
+        CampusMarkets.Market memory draft = market.getMarket(id);
+        require(draft.campus == 1 && draft.creator == ALICE);
+        require(draft.status == CampusMarkets.Status.Draft && draft.allocation == 0);
+        require(market.available() == 100e6 && token.balanceOf(ALICE) == 200e6);
+        vm.prank(VISITOR);
+        require(market.getMarket(id).campus == 1);
+        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.prank(unregistered);
+        market.create(draft.terms);
+        vm.prank(VISITOR);
+        uint256 otherId = market.create(draft.terms);
+        require(market.getMarket(otherId).campus == 2);
+        fund();
+        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.prank(unregistered);
+        market.buy(id, true, 4e6, 0);
+        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.prank(unregistered);
+        market.predict(id, true);
+        market.register(ALICE, 0);
+        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.prank(ALICE);
+        market.buy(id, true, 4e6, 0);
+    }
+
+    function testStaleQuoteRevertsAndFreshMinimumExecutes() public {
+        fund();
+        (uint256 staleShares,,) = market.quote(id, true, 4e6);
+        buy(BOB, true, 10e6);
+        (uint256 freshShares,, uint256 debit) = market.quote(id, true, 4e6);
+        require(freshShares < staleShares);
+        uint256 before = token.balanceOf(ALICE);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.prank(ALICE);
+        market.buy(id, true, 4e6, staleShares);
+        (uint256 yes,, uint256 paid,,) = market.positions(id, ALICE);
+        require(yes == 0 && paid == 0 && token.balanceOf(ALICE) == before);
+        vm.prank(ALICE);
+        require(market.buy(id, true, 4e6, freshShares) == freshShares);
+        (yes,, paid,,) = market.positions(id, ALICE);
+        require(yes == freshShares && paid == debit && before - token.balanceOf(ALICE) == debit);
+    }
+
+    function testDeadlineBoundariesForTradingPredictionAndResolution() public {
+        fund();
+        vm.warp(close - 1);
+        buy(ALICE, true, 4e6);
+        vm.prank(BOB);
+        market.predict(id, true);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.prank(REVIEWER);
+        market.resolve(id, true, bytes32(uint256(1)));
+        vm.warp(close);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.prank(CAROL);
+        market.predict(id, false);
+        vm.warp(deadline - 1);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        market.voidMarket(id);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.prank(REVIEWER);
+        market.resolve(id, true, bytes32(0));
+        vm.prank(REVIEWER);
+        market.resolve(id, true, bytes32(uint256(1)));
+        vm.warp(deadline);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        market.voidMarket(id);
+    }
+
+    function testReviewerAssignmentFreezesBeforeAnyParticipation() public {
+        market.setReviewer(BOB, true);
+        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.prank(BOB);
+        market.assignReviewer(id, BOB);
+        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.prank(BOB);
+        market.setReviewer(BOB, false);
+        fund();
+        buy(BOB, true, 4e6);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        market.assignReviewer(id, BOB);
+        market.setReviewer(CAROL, true);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        market.assignReviewer(id, CAROL);
+        require(market.getMarket(id).reviewer == REVIEWER);
+    }
+
+    function testFuzzImbalancedTradingReservesAndClaims(uint64 rawA, uint64 rawB, uint64 rawC, bool outcome) public {
+        fund();
+        uint256 a = uint256(rawA) % 100e6 + 1;
+        uint256 b = uint256(rawB) % 100e6 + 1;
+        uint256 c = uint256(rawC) % 100e6 + 1;
+        uint256 yesA = buy(ALICE, true, a);
+        uint256 yesB = buy(BOB, true, b);
+        uint256 noC = buy(CAROL, false, c);
+        CampusMarkets.Market memory open = market.getMarket(id);
+        require(open.sets == 20e6 + a + b + c);
+        require(open.yesReserve + yesA + yesB == open.sets);
+        require(open.noReserve + noC == open.sets);
+        require(open.yesReserve * open.noReserve >= 20e6 * 20e6);
+        uint256 fees = a / 100 + b / 100 + c / 100;
+        require(open.fees == fees && token.balanceOf(address(market)) == 100e6 + a + b + c + fees);
+        vm.warp(close);
+        vm.prank(REVIEWER);
+        market.resolve(id, outcome, bytes32(uint256(1)));
+        uint256 claims = outcome ? yesA + yesB : noC;
+        require(market.getMarket(id).remainingClaims == claims);
+        uint256 residual = outcome ? open.yesReserve : open.noReserve;
+        require(market.available() == 80e6 + residual + fees);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.prank(outcome ? CAROL : ALICE);
+        market.claim(id);
+        if (outcome) {
+            vm.prank(BOB);
+            require(market.claim(id) == yesB);
+            vm.prank(ALICE);
+            require(market.claim(id) == yesA);
+        } else {
+            vm.prank(CAROL);
+            require(market.claim(id) == noC);
+        }
+        require(market.getMarket(id).remainingClaims == 0);
+        require(token.balanceOf(address(market)) == market.available());
+    }
+
     function testLateResolutionAndReservedRefunds() public {
         fund();
         buy(ALICE, true, 4e6);
