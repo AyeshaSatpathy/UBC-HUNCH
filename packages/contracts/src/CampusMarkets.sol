@@ -8,8 +8,40 @@ interface Collateral {
 }
 
 contract CampusMarkets {
-    error Invalid();
-    error Unauthorized();
+    error AdminOnly();
+    error AllocationCapExceeded();
+    error AlreadyClaimed();
+    error AssignedReviewerOnly();
+    error CampusEligibilityRequired();
+    error CampusRegistrationRequired();
+    error CollateralDecimalsMismatch();
+    error CollateralTransferFailed();
+    error EvidenceDeadlineNotReached();
+    error EvidenceDeadlinePassed();
+    error InsufficientAvailableCollateral();
+    error InvalidMarketDeadlines();
+    error InvalidPrincipal();
+    error InvalidRoles();
+    error LiquidityProviderOnly();
+    error MarketAlreadyFinalized();
+    error MarketNotDraft();
+    error MarketNotFinalized();
+    error MarketNotOpen();
+    error MinimumSharesNotMet();
+    error MissingEvidence();
+    error MissingMarketTerms();
+    error NothingToClaim();
+    error PredictionAlreadyRecorded();
+    error ReviewerAssignmentLocked();
+    error ReviewerConflict();
+    error ReviewerNotApproved();
+    error TradingClosed();
+    error TradingStillOpen();
+    error UnknownMarket();
+    error UnsupportedArcCollateral();
+    error UnsupportedConfiguredDecimals();
+    error ZeroAmount();
+    error ZeroWallet();
 
     uint256 public constant ALLOCATION_CAP = 20e6;
     uint256 public constant FEE_BPS = 100;
@@ -79,52 +111,56 @@ contract CampusMarkets {
     event Claimed(uint256 indexed id, address indexed wallet, uint256 amount);
 
     constructor(address collateral, address registrar, address lp, uint8 configuredDecimals) {
-        if (registrar == address(0) || lp == address(0) || registrar == lp) revert Invalid();
-        if (block.chainid == 5042002 && collateral != 0x3600000000000000000000000000000000000000) revert Invalid();
+        if (registrar == address(0) || lp == address(0) || registrar == lp) revert InvalidRoles();
+        if (block.chainid == 5042002 && collateral != 0x3600000000000000000000000000000000000000) {
+            revert UnsupportedArcCollateral();
+        }
         asset = Collateral(collateral);
-        if (configuredDecimals != 6 || asset.decimals() != configuredDecimals) revert Invalid();
+        if (configuredDecimals != 6) revert UnsupportedConfiguredDecimals();
+        if (asset.decimals() != configuredDecimals) revert CollateralDecimalsMismatch();
         admin = registrar;
         liquidityProvider = lp;
     }
 
     function register(address wallet, uint256 campus) external {
-        if (msg.sender != admin) revert Unauthorized();
-        if (wallet == address(0)) revert Invalid();
+        if (msg.sender != admin) revert AdminOnly();
+        if (wallet == address(0)) revert ZeroWallet();
         campusOf[wallet] = campus;
         emit CampusRegistered(wallet, campus);
     }
 
     function setReviewer(address wallet, bool approved) external {
-        if (msg.sender != admin) revert Unauthorized();
-        if (wallet == address(0)) revert Invalid();
+        if (msg.sender != admin) revert AdminOnly();
+        if (wallet == address(0)) revert ZeroWallet();
         reviewerRoster[wallet] = approved;
         emit ReviewerRosterUpdated(wallet, approved);
     }
 
     function deposit(uint256 amount) external {
-        if (msg.sender != liquidityProvider) revert Unauthorized();
-        if (amount == 0) revert Invalid();
+        if (msg.sender != liquidityProvider) revert LiquidityProviderOnly();
+        if (amount == 0) revert ZeroAmount();
         available += amount;
-        if (!asset.transferFrom(msg.sender, address(this), amount)) revert Invalid();
+        if (!asset.transferFrom(msg.sender, address(this), amount)) revert CollateralTransferFailed();
         emit VaultDeposited(amount);
     }
 
     function withdraw(uint256 amount) external {
-        if (msg.sender != liquidityProvider) revert Unauthorized();
-        if (amount == 0 || amount > available) revert Invalid();
+        if (msg.sender != liquidityProvider) revert LiquidityProviderOnly();
+        if (amount == 0) revert ZeroAmount();
+        if (amount > available) revert InsufficientAvailableCollateral();
         available -= amount;
-        if (!asset.transfer(msg.sender, amount)) revert Invalid();
+        if (!asset.transfer(msg.sender, amount)) revert CollateralTransferFailed();
         emit VaultWithdrawn(amount);
     }
 
     function create(Terms calldata terms) external returns (uint256 id) {
         uint256 campus = campusOf[msg.sender];
-        if (campus == 0) revert Unauthorized();
+        if (campus == 0) revert CampusRegistrationRequired();
+        if (terms.close <= block.timestamp || terms.deadline <= terms.close) revert InvalidMarketDeadlines();
         if (
-            terms.close <= block.timestamp || terms.deadline <= terms.close || bytes(terms.question).length == 0
-                || bytes(terms.source).length == 0 || bytes(terms.yesRule).length == 0
+            bytes(terms.question).length == 0 || bytes(terms.source).length == 0 || bytes(terms.yesRule).length == 0
                 || bytes(terms.noRule).length == 0
-        ) revert Invalid();
+        ) revert MissingMarketTerms();
         id = ++marketCount;
         Market storage m = markets[id];
         m.terms = terms;
@@ -138,24 +174,26 @@ contract CampusMarkets {
     }
 
     function assignReviewer(uint256 id, address reviewer) external {
-        if (msg.sender != admin) revert Unauthorized();
+        if (msg.sender != admin) revert AdminOnly();
         Market storage m = marketAt(id);
+        if (m.status != Status.Draft) revert ReviewerAssignmentLocked();
+        if (block.timestamp >= m.terms.close) revert TradingClosed();
+        if (!reviewerRoster[reviewer]) revert ReviewerNotApproved();
         Position storage p = positions[id][reviewer];
-        if (
-            m.status != Status.Draft || block.timestamp >= m.terms.close || !reviewerRoster[reviewer]
-                || reviewer == m.creator || p.debit != 0 || p.prediction != 0
-        ) revert Invalid();
+        if (reviewer == m.creator || p.debit != 0 || p.prediction != 0) revert ReviewerConflict();
         m.reviewer = reviewer;
         emit ReviewerAssigned(id, reviewer);
     }
 
     function fund(uint256 id, uint256 allocation) external {
-        if (msg.sender != liquidityProvider) revert Unauthorized();
+        if (msg.sender != liquidityProvider) revert LiquidityProviderOnly();
         Market storage m = marketAt(id);
-        if (
-            m.status != Status.Draft || !reviewerRoster[m.reviewer] || block.timestamp >= m.terms.close
-                || allocation == 0 || allocation > ALLOCATION_CAP || allocation > available
-        ) revert Invalid();
+        if (m.status != Status.Draft) revert MarketNotDraft();
+        if (!reviewerRoster[m.reviewer]) revert ReviewerNotApproved();
+        if (block.timestamp >= m.terms.close) revert TradingClosed();
+        if (allocation == 0) revert ZeroAmount();
+        if (allocation > ALLOCATION_CAP) revert AllocationCapExceeded();
+        if (allocation > available) revert InsufficientAvailableCollateral();
         available -= allocation;
         m.allocation = allocation;
         m.sets = allocation;
@@ -172,7 +210,7 @@ contract CampusMarkets {
     {
         Market storage m = marketAt(id);
         requireOpen(m);
-        if (principal == 0 || principal > type(uint128).max - m.sets) revert Invalid();
+        if (principal == 0 || principal > type(uint128).max - m.sets) revert InvalidPrincipal();
         uint256 selected = yes ? m.yesReserve : m.noReserve;
         uint256 other = yes ? m.noReserve : m.yesReserve;
         // Round the remaining reserve up so shares paid to the buyer round down.
@@ -190,7 +228,7 @@ contract CampusMarkets {
         uint256 fee;
         uint256 debit;
         (shares, fee, debit) = quote(id, yes, principal);
-        if (shares < minShares) revert Invalid();
+        if (shares < minShares) revert MinimumSharesNotMet();
         m.sets += principal;
         m.yesReserve += principal;
         m.noReserve += principal;
@@ -204,7 +242,7 @@ contract CampusMarkets {
             m.noReserve -= shares;
             p.no += shares;
         }
-        if (!asset.transferFrom(msg.sender, address(this), debit)) revert Invalid();
+        if (!asset.transferFrom(msg.sender, address(this), debit)) revert CollateralTransferFailed();
         emit Purchased(id, msg.sender, yes, principal, fee, shares);
     }
 
@@ -213,7 +251,7 @@ contract CampusMarkets {
         requireOpen(m);
         requireStudent(m);
         Position storage p = positions[id][msg.sender];
-        if (p.prediction != 0) revert Invalid();
+        if (p.prediction != 0) revert PredictionAlreadyRecorded();
         p.prediction = yes ? 1 : 2;
         emit Predicted(id, msg.sender, yes);
     }
@@ -227,11 +265,11 @@ contract CampusMarkets {
 
     function resolve(uint256 id, bool yes, bytes32 evidence) external {
         Market storage m = marketAt(id);
-        if (msg.sender != m.reviewer) revert Unauthorized();
-        if (
-            m.status != Status.Open || block.timestamp < m.terms.close || block.timestamp >= m.terms.deadline
-                || evidence == bytes32(0)
-        ) revert Invalid();
+        if (msg.sender != m.reviewer) revert AssignedReviewerOnly();
+        if (m.status != Status.Open) revert MarketNotOpen();
+        if (block.timestamp < m.terms.close) revert TradingStillOpen();
+        if (block.timestamp >= m.terms.deadline) revert EvidenceDeadlinePassed();
+        if (evidence == bytes32(0)) revert MissingEvidence();
         m.status = yes ? Status.Yes : Status.No;
         m.evidence = evidence;
         uint256 residual = yes ? m.yesReserve : m.noReserve;
@@ -242,9 +280,8 @@ contract CampusMarkets {
 
     function voidMarket(uint256 id) external {
         Market storage m = marketAt(id);
-        if ((m.status != Status.Open && m.status != Status.Draft) || block.timestamp < m.terms.deadline) {
-            revert Invalid();
-        }
+        if (m.status != Status.Open && m.status != Status.Draft) revert MarketAlreadyFinalized();
+        if (block.timestamp < m.terms.deadline) revert EvidenceDeadlineNotReached();
         m.status = Status.Voided;
         m.remainingClaims = m.sets - m.allocation + m.fees;
         available += m.allocation;
@@ -254,28 +291,30 @@ contract CampusMarkets {
     function claim(uint256 id) external returns (uint256 amount) {
         Market storage m = marketAt(id);
         Position storage p = positions[id][msg.sender];
-        if (p.claimed) revert Invalid();
+        if (p.claimed) revert AlreadyClaimed();
         if (m.status == Status.Yes) amount = p.yes;
         else if (m.status == Status.No) amount = p.no;
         else if (m.status == Status.Voided) amount = p.debit;
-        else revert Invalid();
-        if (amount == 0) revert Invalid();
+        else revert MarketNotFinalized();
+        if (amount == 0) revert NothingToClaim();
         p.claimed = true;
         m.remainingClaims -= amount;
-        if (!asset.transfer(msg.sender, amount)) revert Invalid();
+        if (!asset.transfer(msg.sender, amount)) revert CollateralTransferFailed();
         emit Claimed(id, msg.sender, amount);
     }
 
     function marketAt(uint256 id) private view returns (Market storage m) {
-        if (id == 0 || id > marketCount) revert Invalid();
+        if (id == 0 || id > marketCount) revert UnknownMarket();
         m = markets[id];
     }
 
     function requireOpen(Market storage m) private view {
-        if (m.status != Status.Open || block.timestamp >= m.terms.close) revert Invalid();
+        if (m.status != Status.Open) revert MarketNotOpen();
+        if (block.timestamp >= m.terms.close) revert TradingClosed();
     }
 
     function requireStudent(Market storage m) private view {
-        if (msg.sender == m.reviewer || campusOf[msg.sender] != m.campus) revert Unauthorized();
+        if (msg.sender == m.reviewer) revert ReviewerConflict();
+        if (campusOf[msg.sender] != m.campus) revert CampusEligibilityRequired();
     }
 }

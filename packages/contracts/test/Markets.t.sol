@@ -77,13 +77,13 @@ contract MarketsTest {
 
     function testRejectsNonSixDecimalConfigurationEvenWhenTokenMatches() public {
         FixtureUSDC nativePrecisionFixture = new FixtureUSDC(18);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.UnsupportedConfiguredDecimals.selector);
         new CampusMarkets(address(nativePrecisionFixture), address(this), LP, 18);
     }
 
     function testRejectsTokenDecimalsThatDisagreeWithConfiguration() public {
         FixtureUSDC wrongPrecision = new FixtureUSDC(18);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.CollateralDecimalsMismatch.selector);
         new CampusMarkets(address(wrongPrecision), address(this), LP, 6);
     }
 
@@ -97,6 +97,62 @@ contract MarketsTest {
         vm.prank(who);
         shares = market.buy(id, yes, principal, quoted);
         require(shares == quoted, "execution differs from preview");
+    }
+
+    function testLPFeesStayEscrowedUntilSettlement() public {
+        fund();
+        buy(ALICE, true, 4e6);
+        require(market.getMarket(id).fees == 40_000 && market.available() == 80e6);
+        vm.expectRevert(CampusMarkets.InsufficientAvailableCollateral.selector);
+        vm.prank(LP);
+        market.withdraw(80e6 + 1);
+        vm.prank(LP);
+        market.withdraw(80e6);
+        vm.expectRevert(CampusMarkets.InsufficientAvailableCollateral.selector);
+        vm.prank(LP);
+        market.withdraw(40_000);
+        vm.warp(close);
+        vm.prank(REVIEWER);
+        market.resolve(id, true, bytes32(uint256(1)));
+        CampusMarkets.Market memory settled = market.getMarket(id);
+        require(market.available() == settled.yesReserve + 40_000);
+        uint256 withdrawable = market.available();
+        vm.prank(LP);
+        market.withdraw(withdrawable);
+        vm.prank(ALICE);
+        require(market.claim(id) == 7_333_333);
+        require(token.balanceOf(address(market)) == 0);
+    }
+
+    function testFundingRejectsAboveCap() public {
+        vm.expectRevert(CampusMarkets.AllocationCapExceeded.selector);
+        vm.prank(LP);
+        market.fund(id, 20e6 + 1);
+        require(market.available() == 100e6);
+    }
+
+    function testFundingRejectsNonLP() public {
+        vm.expectRevert(CampusMarkets.LiquidityProviderOnly.selector);
+        vm.prank(ALICE);
+        market.fund(id, 20e6);
+        require(market.available() == 100e6);
+    }
+
+    function testFundingRejectsSecondAllocation() public {
+        fund();
+        vm.expectRevert(CampusMarkets.MarketNotDraft.selector);
+        vm.prank(LP);
+        market.fund(id, 20e6);
+        require(market.available() == 80e6 && market.getMarket(id).allocation == 20e6);
+    }
+
+    function testFundingRejectsAllocationAboveAvailableVaultBalance() public {
+        vm.prank(LP);
+        market.withdraw(80e6 + 1);
+        vm.expectRevert(CampusMarkets.InsufficientAvailableCollateral.selector);
+        vm.prank(LP);
+        market.fund(id, 20e6);
+        require(market.available() == 20e6 - 1);
     }
 
     function testFourUnitPurchaseRoundsSharesDown() public {
@@ -116,21 +172,21 @@ contract MarketsTest {
         require(market.available() == 100e6 && token.balanceOf(ALICE) == 200e6);
         vm.prank(VISITOR);
         require(market.getMarket(id).campus == 1);
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.CampusRegistrationRequired.selector);
         vm.prank(unregistered);
         market.create(draft.terms);
         vm.prank(VISITOR);
         uint256 otherId = market.create(draft.terms);
         require(market.getMarket(otherId).campus == 2);
         fund();
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.CampusEligibilityRequired.selector);
         vm.prank(unregistered);
         market.buy(id, true, 4e6, 0);
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.CampusEligibilityRequired.selector);
         vm.prank(unregistered);
         market.predict(id, true);
         market.register(ALICE, 0);
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.CampusEligibilityRequired.selector);
         vm.prank(ALICE);
         market.buy(id, true, 4e6, 0);
     }
@@ -142,7 +198,7 @@ contract MarketsTest {
         (uint256 freshShares,, uint256 debit) = market.quote(id, true, 4e6);
         require(freshShares < staleShares);
         uint256 before = token.balanceOf(ALICE);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.MinimumSharesNotMet.selector);
         vm.prank(ALICE);
         market.buy(id, true, 4e6, staleShares);
         (uint256 yes,, uint256 paid,,) = market.positions(id, ALICE);
@@ -159,40 +215,40 @@ contract MarketsTest {
         buy(ALICE, true, 4e6);
         vm.prank(BOB);
         market.predict(id, true);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.TradingStillOpen.selector);
         vm.prank(REVIEWER);
         market.resolve(id, true, bytes32(uint256(1)));
         vm.warp(close);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.TradingClosed.selector);
         vm.prank(CAROL);
         market.predict(id, false);
         vm.warp(deadline - 1);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.EvidenceDeadlineNotReached.selector);
         market.voidMarket(id);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.MissingEvidence.selector);
         vm.prank(REVIEWER);
         market.resolve(id, true, bytes32(0));
         vm.prank(REVIEWER);
         market.resolve(id, true, bytes32(uint256(1)));
         vm.warp(deadline);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.MarketAlreadyFinalized.selector);
         market.voidMarket(id);
     }
 
     function testReviewerAssignmentFreezesBeforeAnyParticipation() public {
         market.setReviewer(BOB, true);
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.AdminOnly.selector);
         vm.prank(BOB);
         market.assignReviewer(id, BOB);
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.AdminOnly.selector);
         vm.prank(BOB);
         market.setReviewer(BOB, false);
         fund();
         buy(BOB, true, 4e6);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.ReviewerAssignmentLocked.selector);
         market.assignReviewer(id, BOB);
         market.setReviewer(CAROL, true);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.ReviewerAssignmentLocked.selector);
         market.assignReviewer(id, CAROL);
         require(market.getMarket(id).reviewer == REVIEWER);
     }
@@ -219,7 +275,7 @@ contract MarketsTest {
         require(market.getMarket(id).remainingClaims == claims);
         uint256 residual = outcome ? open.yesReserve : open.noReserve;
         require(market.available() == 80e6 + residual + fees);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.NothingToClaim.selector);
         vm.prank(outcome ? CAROL : ALICE);
         market.claim(id);
         if (outcome) {
@@ -240,16 +296,16 @@ contract MarketsTest {
         buy(ALICE, true, 4e6);
         vm.prank(BOB);
         market.predict(id, false);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.EvidenceDeadlineNotReached.selector);
         market.voidMarket(id);
         vm.warp(deadline);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.EvidenceDeadlinePassed.selector);
         vm.prank(REVIEWER);
         market.resolve(id, true, bytes32(uint256(1)));
         market.voidMarket(id);
         (bool scored,) = market.score(id, BOB);
         require(!scored);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.InsufficientAvailableCollateral.selector);
         vm.prank(LP);
         market.withdraw(100e6 + 1);
         vm.prank(LP);
@@ -297,7 +353,7 @@ contract MarketsTest {
             uint256 i = (order / 2 + (order % 2 == 0 ? j : 3 - j)) % 3;
             vm.prank(wallets[i]);
             require(market.claim(id) == payouts[i]);
-            vm.expectRevert(CampusMarkets.Invalid.selector);
+            vm.expectRevert(CampusMarkets.AlreadyClaimed.selector);
             vm.prank(wallets[i]);
             market.claim(id);
         }
@@ -305,50 +361,50 @@ contract MarketsTest {
     }
 
     function testEligibilityReviewerAndDeadlines() public {
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.MarketNotOpen.selector);
         vm.prank(ALICE);
         market.buy(id, true, 4e6, 0);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.ReviewerNotApproved.selector);
         market.assignReviewer(id, BOB);
         market.setReviewer(ALICE, true);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.ReviewerConflict.selector);
         market.assignReviewer(id, ALICE);
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.AdminOnly.selector);
         vm.prank(VISITOR);
         market.register(VISITOR, 1);
         fund();
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.CampusEligibilityRequired.selector);
         vm.prank(VISITOR);
         market.buy(id, true, 4e6, 0);
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.CampusEligibilityRequired.selector);
         vm.prank(VISITOR);
         market.predict(id, true);
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.ReviewerConflict.selector);
         vm.prank(REVIEWER);
         market.buy(id, true, 4e6, 0);
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.ReviewerConflict.selector);
         vm.prank(REVIEWER);
         market.predict(id, true);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.MinimumSharesNotMet.selector);
         vm.prank(ALICE);
         market.buy(id, true, 4e6, 9e6);
         vm.prank(BOB);
         market.predict(id, false);
         market.setReviewer(BOB, true);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.ReviewerAssignmentLocked.selector);
         market.assignReviewer(id, BOB);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.PredictionAlreadyRecorded.selector);
         vm.prank(BOB);
         market.predict(id, true);
         vm.warp(close);
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.TradingClosed.selector);
         vm.prank(ALICE);
         market.buy(id, true, 4e6, 0);
-        vm.expectRevert(CampusMarkets.Unauthorized.selector);
+        vm.expectRevert(CampusMarkets.AssignedReviewerOnly.selector);
         market.resolve(id, false, bytes32(uint256(1)));
         vm.prank(REVIEWER);
         market.resolve(id, false, bytes32(uint256(1)));
-        vm.expectRevert(CampusMarkets.Invalid.selector);
+        vm.expectRevert(CampusMarkets.MarketNotOpen.selector);
         vm.prank(REVIEWER);
         market.resolve(id, false, bytes32(uint256(1)));
         (bool scored, bool correct) = market.score(id, BOB);

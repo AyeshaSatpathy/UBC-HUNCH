@@ -10,4 +10,6 @@ Arc charges transaction gas in native USDC from the same wallet balance. The dep
 
 ## Verification and deployment
 
-The local Foundry suite uses a labeled synthetic ERC-20 fixture. It checks constructor rejection for a configured precision other than six and for a token precision mismatch. It also covers purchase pricing and slippage, vault accounting, settlement and void claims, campus eligibility, deadlines, and reviewer conflicts. Arc deployment and transfers through live Arc USDC are pending. The deployer address must be verified as distinct from the LP before broadcast.
+The local Foundry suite uses a labeled synthetic ERC-20 fixture. It checks constructor rejection for a configured precision other than six and for a token precision mismatch. It covers purchase pricing and slippage, fee escrow and release, settlement and void claims, campus eligibility, deadlines, and reviewer conflicts. Funding tests check the allocation cap, LP authorization, duplicate allocations, and the available vault balance. Revert tests check specific custom error selectors.
+
+The deployment script simulated successfully on an Arc testnet fork using a placeholder admin address and the configured USDC contract. The estimated maximum gas cost was 0.120896775 USDC at simulation time. Deployment, the 100-USDC deposit, and a live trade are pending. The deployer address must be verified as distinct from the LP before broadcast.
