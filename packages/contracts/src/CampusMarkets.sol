@@ -78,11 +78,11 @@ contract CampusMarkets {
     event Finalized(uint256 indexed id, Status status, bytes32 evidence, uint256 capitalReturned, uint256 feesReturned);
     event Claimed(uint256 indexed id, address indexed wallet, uint256 amount);
 
-    constructor(address collateral, address registrar, address lp) {
+    constructor(address collateral, address registrar, address lp, uint8 configuredDecimals) {
         if (registrar == address(0) || lp == address(0) || registrar == lp) revert Invalid();
         if (block.chainid == 5042002 && collateral != 0x3600000000000000000000000000000000000000) revert Invalid();
         asset = Collateral(collateral);
-        if (asset.decimals() != 6) revert Invalid();
+        if (configuredDecimals != 6 || asset.decimals() != configuredDecimals) revert Invalid();
         admin = registrar;
         liquidityProvider = lp;
     }

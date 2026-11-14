@@ -10,9 +10,13 @@ interface Vm {
 }
 
 contract FixtureUSDC {
-    uint8 public constant decimals = 6;
+    uint8 public immutable decimals;
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
+
+    constructor(uint8 precision) {
+        decimals = precision;
+    }
 
     function mint(address to, uint256 amount) external {
         balanceOf[to] += amount;
@@ -52,8 +56,8 @@ contract MarketsTest {
     uint256 id;
 
     function setUp() public {
-        token = new FixtureUSDC();
-        market = new CampusMarkets(address(token), address(this), LP);
+        token = new FixtureUSDC(6);
+        market = new CampusMarkets(address(token), address(this), LP, 6);
         address[6] memory wallets = [LP, ALICE, BOB, CAROL, REVIEWER, VISITOR];
         for (uint256 i; i < wallets.length; ++i) {
             token.mint(wallets[i], 200e6);
@@ -69,6 +73,18 @@ contract MarketsTest {
         id = market.create(CampusMarkets.Terms("Will it pass?", "Official results", "Pass", "Fail", close, deadline));
         market.setReviewer(REVIEWER, true);
         market.assignReviewer(id, REVIEWER);
+    }
+
+    function testRejectsNonSixDecimalConfigurationEvenWhenTokenMatches() public {
+        FixtureUSDC nativePrecisionFixture = new FixtureUSDC(18);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        new CampusMarkets(address(nativePrecisionFixture), address(this), LP, 18);
+    }
+
+    function testRejectsTokenDecimalsThatDisagreeWithConfiguration() public {
+        FixtureUSDC wrongPrecision = new FixtureUSDC(18);
+        vm.expectRevert(CampusMarkets.Invalid.selector);
+        new CampusMarkets(address(wrongPrecision), address(this), LP, 6);
     }
 
     function fund() internal {
