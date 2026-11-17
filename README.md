@@ -47,6 +47,23 @@ The Expo app uses the typed API for campus search, school sign-in, markets, live
 
 Run `bun run --cwd apps/api arc:student-operations --follow` to keep advancing student purchases, predictions, and drafts after the app closes. Run `bun run arc:index --follow` to keep the market and portfolio projections current. The app can also advance a user's pending action while it is open. Purchases use the shares from the confirmed quote as the minimum and verify the approval and trade receipts before reporting success. Configure the Circle Gas Station policy for student wallet contract calls. [Funding a draft](packages/contracts/README.md#fund-a-student-market)
 
+## Reviewer Console
+
+Open `http://localhost:3000/reviewer` on the PC and sign in with the approved reviewer's school email. The console shows assigned markets and accepts a public evidence reference with a YES or NO outcome after trading closes and before the evidence deadline. The student operations worker submits queued resolutions and verifies the result. Use **Refresh statuses** to check confirmation. The student app has no reviewer route or navigation link.
+
+Use a separate verified and provisioned school account for the reviewer. Find its public address with `bun run --cwd apps/api arc:reviewer $reviewerEmail show`. The contract admin approves that address, then `bun run --cwd apps/api arc:reviewer $reviewerEmail enable` enables console access. Use `disable` to revoke console access. For each draft the contract admin must assign the approved reviewer before the funding worker can open it.
+
+```powershell
+$marketContract = '0x73Dd30B231f405C1DCf0812c64dDCc5F02143D20'
+$arcRpc = 'https://rpc.testnet.arc.io'
+$cast = '.\.tools\foundry\cast.exe'
+# Set $reviewerAddress to the public address returned by arc:reviewer.
+& $cast send $marketContract 'setReviewer(address,bool)' $reviewerAddress true --account arc-deployer --rpc-url $arcRpc
+bun run --cwd apps/api arc:reviewer $reviewerEmail enable
+# Set $marketId to the number shown after the student publishes the draft.
+& $cast send $marketContract 'assignReviewer(uint256,address)' $marketId $reviewerAddress --account arc-deployer --rpc-url $arcRpc
+```
+
 ## Database workflow
 
 Edit `apps/api/src/schema.ts`, run `bun run db:generate`, review and commit the SQL migration, then run `bun run db:migrate`. Apply migrations once before deploying API instances. Local PostgreSQL uses port 55432. PostgreSQL data persists in the Docker volume. Use a separate database URL for production.

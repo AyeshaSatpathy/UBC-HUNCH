@@ -1,0 +1,1 @@
+ALTER TABLE "accounts" ADD COLUMN "is_reviewer" boolean DEFAULT false NOT NULL;

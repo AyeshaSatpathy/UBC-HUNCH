@@ -26,6 +26,7 @@ export const accounts = pgTable("accounts", {
   email: text("email").notNull().unique(),
   unitid: integer("unitid").notNull().references(() => campuses.unitid),
   verifiedAt: date("verified_at").notNull(),
+  isReviewer: boolean("is_reviewer").notNull().default(false),
   wallet: text("wallet").unique(),
   circleWalletId: text("circle_wallet_id").unique(),
   registeredAt: date("registered_at"),
@@ -69,6 +70,7 @@ export const claimRequests = pgTable("claim_requests", {
 export type StudentOperationInput =
   | { kind: "buy"; marketId: string; side: "YES" | "NO"; cents: number; shares: string }
   | { kind: "predict"; marketId: string; side: "YES" | "NO" }
+  | { kind: "resolve"; marketId: string; side: "YES" | "NO"; reference: string }
   | { kind: "create"; question: string; source: string; yesRule: string; noRule: string; close: number; deadline: number };
 
 export const studentOperations = pgTable("student_operations", {

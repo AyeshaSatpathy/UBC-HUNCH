@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { encodeFunctionData, parseEventLogs, type Address, type Hash } from "viem";
+import { BaseError, ContractFunctionRevertedError, encodeFunctionData, keccak256, parseEventLogs, toHex, type Address, type Hash } from "viem";
 import type { Database } from "../db";
 import { accounts, studentOperations, type StudentOperationInput } from "../schema";
 import { collateralAbi, createArcClient, market, marketAbi, usdc } from "./contract";
@@ -14,6 +14,21 @@ const publicOperation = (op: Operation) => ({
   id: op.id, kind: op.input.kind, status: op.stage === "approval" || op.stage === "submit" ? "pending" as const : op.stage,
   marketId: op.resultMarketId ?? ("marketId" in op.input ? op.input.marketId : null),
 });
+
+const referenceHash = (reference: string) => keccak256(toHex(reference));
+
+async function requireResolution(account: Account, address: Address, input: Extract<StudentOperationInput, { kind: "resolve" }>) {
+  if (!account.isReviewer) throw new TRPCError({ code: "FORBIDDEN", message: "Reviewer access is required." });
+  const approved = await arc.readContract({ address: market, abi: marketAbi, functionName: "reviewerRoster", args: [address] });
+  if (!approved) throw new TRPCError({ code: "FORBIDDEN", message: "Reviewer approval is required." });
+  try {
+    await arc.simulateContract({ address: market, abi: marketAbi, account: address, functionName: "resolve",
+      args: [BigInt(input.marketId), input.side === "YES", referenceHash(input.reference)] });
+  } catch (error) {
+    if (!(error instanceof BaseError) || !(error.walk(cause => cause instanceof ContractFunctionRevertedError) instanceof ContractFunctionRevertedError)) throw error;
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This market cannot be resolved by your account at this time." });
+  }
+}
 
 function requireReady(account: Account) {
   if (!account.wallet || !account.circleWalletId || !account.fundedAt) {
@@ -40,6 +55,8 @@ export async function startStudentOperation(db: Database, account: Account, requ
       if (input.close <= Date.now() / 1_000 || input.deadline <= input.close) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Choose a future trading close and a later evidence deadline." });
       }
+    } else if (input.kind === "resolve") {
+      await requireResolution(account, address, input);
     } else {
       const item = await getMarket(db, input.marketId, address);
       if (item.status !== "open" || item.campus.unitid !== account.unitid || !item.canParticipate) {
@@ -81,6 +98,9 @@ function execution(op: Operation) {
   if (input.kind === "predict") return { target: market, data: encodeFunctionData({
     abi: marketAbi, functionName: "predict", args: [BigInt(input.marketId), input.side === "YES"],
   }) };
+  if (input.kind === "resolve") return { target: market, data: encodeFunctionData({
+    abi: marketAbi, functionName: "resolve", args: [BigInt(input.marketId), input.side === "YES", referenceHash(input.reference)],
+  }) };
   return { target: market, data: encodeFunctionData({
     abi: marketAbi, functionName: "create", args: [{
       question: input.question, source: input.source, yesRule: input.yesRule, noRule: input.noRule,
@@ -89,11 +109,11 @@ function execution(op: Operation) {
   }) };
 }
 
-export async function advanceStudentOperation(db: Database, account: Account, id: string) {
+export async function advanceStudentOperation(db: Database, account: Account, id: string, fromWorker = false) {
   return db.transaction(async (tx) => {
     const [op] = await tx.select().from(studentOperations)
       .where(and(eq(studentOperations.id, id), eq(studentOperations.accountId, account.id))).for("update");
-    if (!op) throw new TRPCError({ code: "NOT_FOUND", message: "Action unavailable." });
+    if (!op || (op.input.kind === "resolve" && !fromWorker)) throw new TRPCError({ code: "NOT_FOUND", message: "Action unavailable." });
     if (op.stage === "confirmed" || op.stage === "failed") return publicOperation(op);
     const { address, circleId } = requireReady(account);
     const save = async (values: Partial<Operation>) => {
@@ -105,6 +125,15 @@ export async function advanceStudentOperation(db: Database, account: Account, id
       const ref = `student:${op.id}:${op.stage}`;
       const existing = await findCircleTransaction(circleId, ref, op.createdAt);
       if (existing) return save({ circleId: existing.id });
+      if (op.input.kind === "resolve") {
+        const [reviewer] = await tx.select({ isReviewer: accounts.isReviewer }).from(accounts)
+          .where(eq(accounts.id, account.id)).for("share");
+        try { await requireResolution({ ...account, isReviewer: reviewer?.isReviewer ?? false }, address, op.input); }
+        catch (error) {
+          if (error instanceof TRPCError) return save({ stage: "failed" });
+          throw error;
+        }
+      }
       const { target, data } = execution(op);
       const response = await circle.createContractExecutionTransaction({
         walletId: circleId, contractAddress: target, callData: data, refId: ref, idempotencyKey: requestId(ref),
@@ -127,6 +156,12 @@ export async function advanceStudentOperation(db: Database, account: Account, id
     }
     const logs = receipt.logs.filter((log) => log.address.toLowerCase() === market);
     const input = op.input;
+    if (input.kind === "resolve") {
+      const valid = parseEventLogs({ abi: marketAbi, eventName: "Finalized", logs }).some(({ args }) =>
+        args.id.toString() === input.marketId && args.status === (input.side === "YES" ? 2 : 3) &&
+        args.evidence === referenceHash(input.reference));
+      return save({ stage: valid ? "confirmed" : "failed" });
+    }
     if (input.kind === "create") {
       const event = parseEventLogs({ abi: marketAbi, eventName: "MarketCreated", logs })
         .find(({ args }) => args.creator.toLowerCase() === address && args.campus === BigInt(account.unitid));
@@ -144,7 +179,8 @@ export async function advanceStudentOperation(db: Database, account: Account, id
 
 export async function pendingStudentOperations(db: Database, account: Account) {
   const rows = await db.select().from(studentOperations).where(
-    and(eq(studentOperations.accountId, account.id), inArray(studentOperations.stage, active)),
+    and(eq(studentOperations.accountId, account.id), inArray(studentOperations.stage, active),
+      sql`${studentOperations.input}->>'kind' <> 'resolve'`),
   ).orderBy(asc(studentOperations.createdAt));
   return rows.map(publicOperation);
 }

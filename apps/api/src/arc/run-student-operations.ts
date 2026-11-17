@@ -18,7 +18,7 @@ try {
       .orderBy(asc(studentOperations.createdAt));
     for (const { id, account } of pending) {
       if (stopping) break;
-      try { await advanceStudentOperation(db, account, id); }
+      try { await advanceStudentOperation(db, account, id, true); }
       catch { console.warn("Student action will be checked again", id); }
     }
     if (follow && !stopping) await Bun.sleep(3_000);

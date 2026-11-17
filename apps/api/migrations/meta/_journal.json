@@ -43,6 +43,13 @@
       "when": 1794895467389,
       "tag": "0005_auto_funding",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794895797810,
+      "tag": "0006_reviewer_access",
+      "breakpoints": true
     }
   ]
 }

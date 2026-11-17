@@ -23,6 +23,7 @@ export const marketAbi = parseAbi([
   "function ALLOCATION_CAP() view returns (uint256)",
   "function fund(uint256 id, uint256 allocation)",
   "function reviewerRoster(address reviewer) view returns (bool)",
+  "function resolve(uint256 id, bool yes, bytes32 evidence)",
   "function campusOf(address wallet) view returns (uint256)",
   "function register(address wallet, uint256 campus)",
   "function create(Terms terms) returns (uint256 id)",
