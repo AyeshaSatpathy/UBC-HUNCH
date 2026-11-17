@@ -13,14 +13,16 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun src/migrate.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "seed:arc": "bun src/seed/arc.ts"
   },
   "dependencies": {
+    "@circle-fin/developer-controlled-wallets": "^10.8.1",
     "@trpc/server": "^11.28.1",
+    "drizzle-orm": "^0.44.0",
     "hono": "^4.13.0",
-    "zod": "^4.0.0",
     "postgres": "^3.4.7",
-    "drizzle-orm": "^0.44.0"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.0",
