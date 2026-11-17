@@ -14,19 +14,30 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun src/migrate.ts",
     "test": "bun test",
-    "seed:arc": "bun src/seed/arc.ts"
+    "seed:arc": "bun src/seed/arc.ts",
+    "db:seed:campuses": "bun src/seed/campuses.ts",
+    "arc:index": "bun src/arc/run-indexer.ts",
+    "arc:treasury": "bun src/arc/treasury.ts",
+    "arc:provision-accounts": "bun src/arc/provision-accounts.ts",
+    "arc:student-operations": "bun src/arc/run-student-operations.ts",
+    "arc:auto-fund": "bun src/arc/run-auto-funding.ts",
+    "arc:provision-treasury": "bun src/arc/provision-treasury.ts"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^10.8.1",
     "@trpc/server": "^11.28.1",
+    "csv-parse": "^7.0.3",
     "drizzle-orm": "^0.44.0",
+    "fflate": "^0.8.3",
     "hono": "^4.13.0",
     "postgres": "^3.4.7",
+    "viem": "^2.58.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.0",
+    "@trpc/client": "^11.28.1",
     "@types/bun": "^1.3.0",
-    "@trpc/client": "^11.28.1"
+    "@types/node": "22",
+    "drizzle-kit": "^0.31.0"
   }
 }

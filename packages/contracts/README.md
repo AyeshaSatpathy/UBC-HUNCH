@@ -27,4 +27,16 @@ $env:ARC_USDC_DECIMALS = '6'
 
 The LP approves a `100000000` asset-unit allowance and calls `deposit(100000000)` for the demo. The admin registers students and assigns a reviewer to each draft. The LP can allocate up to `20000000` units per market. Opening freezes the reviewer. Trading ends at `close`, the reviewer can resolve during `[close, deadline)`, and anyone can void starting at `deadline`. Source text and public evidence references must contain only public information. Restricted evidence uses a salted digest as the reference.
 
+### Fund a student market
+
+The app publishes the student's market as a draft. The admin approves a reviewer on the roster and assigns that reviewer to the draft. The LP then moves an allocation from the existing vault into the market. Successful funding opens trading immediately. No new deposit or approval is needed while the vault covers the allocation.
+
+The draft screen shows its market number. For the local LP keystore, run this from the repo root after reviewer assignment and before trading closes. Enter the keystore password in the local Foundry prompt. The script checks eligibility with a read-only call before sending. Add `-PreflightOnly` to stop after the read-only check.
+
+```powershell
+& .\packages\contracts\script\fund-market.ps1 -MarketId <market-id>
+```
+
+The default allocation is $20. The auto-funding worker uses the existing LP signer from `ARC_LP_PRIVATE_KEY` in `apps/api/.env`. Run `bun run --cwd apps/api arc:auto-fund --follow` with the indexer running. It checks each draft against the deployed contract, saves one signed funding transaction before broadcast, and logs the confirmed receipt. The durable ledger limits successful automatic allocations to four for this deployment. Keep that database when restarting the worker. The worker only signs funding calls. The deployed LP signer also has withdrawal authority, so store its key only in the local worker environment. Stop the worker and reconcile any pending funding transaction before using that same signer through the manual script.
+
 Shares are measured in millionths and round down. The 1% fee also rounds down to the nearest asset unit. Settlement credits residual collateral and fees to available vault funds after reserving winning claims. Void restores only the initial allocation to the vault and reserves each buyer's full debit. Claims remain available after a campus registration changes.

@@ -8,6 +8,41 @@
       "when": 1794645319109,
       "tag": "0000_medical_sabra",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794887244119,
+      "tag": "0001_fixed_the_stranger",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794889186539,
+      "tag": "0002_perpetual_stellaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794890693937,
+      "tag": "0003_accounts_and_claims",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794892441549,
+      "tag": "0004_student_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794895467389,
+      "tag": "0005_auto_funding",
+      "breakpoints": true
     }
   ]
 }

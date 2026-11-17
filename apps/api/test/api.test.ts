@@ -26,3 +26,28 @@ test("persists and reads a note through Hono and tRPC", async () => {
     await client.end();
   }
 });
+
+test("finds seeded IPEDS campuses by alias, location, and exact UNITID", async () => {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("Set DATABASE_URL to a migrated database and run db:seed:campuses");
+  const { db, client } = connectDatabase(url);
+  const server = Bun.serve({ port: 0, fetch: createApp(db, []).fetch });
+  const api = createTRPCClient<AppRouter>({
+    links: [httpBatchLink({ url: `${server.url}trpc` })],
+  });
+  const austin = {
+    unitid: 228778, name: "The University of Texas at Austin", city: "Austin", state: "TX",
+  };
+  try {
+    expect(await api.campuses.search.query({ query: "228778" })).toEqual([austin]);
+    expect(await api.campuses.search.query({ query: "ut aust" })).toContainEqual(austin);
+    const local = await api.campuses.search.query({ query: "Austin TX", limit: 2 });
+    expect(local).toHaveLength(2);
+    expect(local.every((campus) => campus.city === "Austin" && campus.state === "TX")).toBe(true);
+    expect(await api.campuses.search.query({ query: "!!!" })).toEqual([]);
+    await expect(api.campuses.search.query({ query: "Austin", limit: 26 })).rejects.toThrow();
+  } finally {
+    await server.stop(true);
+    await client.end();
+  }
+});

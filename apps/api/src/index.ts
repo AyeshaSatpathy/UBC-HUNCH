@@ -12,11 +12,12 @@ const { db, client } = connectDatabase(env.DATABASE_URL);
 const app = createApp(
   db,
   env.CORS_ORIGINS.split(",").map((s) => s.trim()),
+  (request) => server.requestIP(request)?.address,
 );
 const server = Bun.serve({
   hostname: "0.0.0.0",
   port: env.PORT,
-  fetch: app.fetch,
+  fetch(request): Response | Promise<Response> { return app.fetch(request); },
 });
 console.log(`API listening on ${server.url}`);
 async function shutdown() {

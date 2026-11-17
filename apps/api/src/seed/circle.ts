@@ -19,6 +19,26 @@ if (!/^[0-9a-f]{64}$/i.test(entitySecret)) throw new Error('Invalid entity secre
 
 export const circle = initiateDeveloperControlledWalletsClient({ apiKey, entitySecret });
 
+export async function findCircleTransaction(walletId: string, refId: string, notBefore: Date) {
+  let pageAfter: string | undefined;
+  for (;;) {
+    const response = await circle.listTransactions({ walletIds: [walletId], pageAfter, pageSize: 50 });
+    const rows = response.data?.transactions ?? [];
+    const match = rows.find((row) => row.refId === refId);
+    if (match) return match;
+    for (const row of rows) {
+      if (row.refId || new Date(row.createDate) < notBefore) continue;
+      // Circle omits refId from transaction summaries for some smart account operations.
+      const detail = (await circle.getTransaction({ id: row.id })).data?.transaction;
+      if (detail?.refId === refId) return detail;
+    }
+    if (rows.length < 50) return undefined;
+    const next = rows.at(-1)?.id;
+    if (!next || next === pageAfter) throw new Error("Circle transaction pagination did not advance");
+    pageAfter = next;
+  }
+}
+
 // UUIDv4 format with a stable digest so rerunning does not duplicate requests.
 export function requestId(label: string) {
   const value = createHash('sha256').update('hunch-arc-seed-v1:' + market + ':' + label).digest('hex');

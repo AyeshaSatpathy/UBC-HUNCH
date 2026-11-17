@@ -4,7 +4,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { sql } from "drizzle-orm";
 import { appRouter } from "./router";
 import type { Database } from "./db";
-export function createApp(db: Database, origins: string[]) {
+export function createApp(db: Database, origins: string[], requestIp?: (request: Request) => string | undefined) {
   const app = new Hono();
   app.use("/trpc/*", cors({ origin: origins }));
   app.get("/health", (c) => c.json({ status: "ok" }));
@@ -21,7 +21,11 @@ export function createApp(db: Database, origins: string[]) {
       endpoint: "/trpc",
       req: c.req.raw,
       router: appRouter,
-      createContext: () => ({ db }),
+      createContext: () => ({
+        db,
+        authorization: c.req.header("authorization"),
+        requester: requestIp?.(c.req.raw) ?? "unknown",
+      }),
     }),
   );
   return app;

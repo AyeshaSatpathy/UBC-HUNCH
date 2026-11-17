@@ -1,0 +1,44 @@
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { Text, View } from 'react-native';
+import { isOpen, useAccount, useCampus, useSession } from '../../api';
+import { CampusSearch, type Campus } from '../../campuses';
+import { MarketCard } from '../../markets';
+import { Button, Note, Page, Wordmark, s } from '../../ui';
+
+export default function Feed() {
+  const { api } = useSession();
+  const account = useAccount();
+  const campus = useCampus(account.data?.campusId);
+  const [selected, select] = useState<Campus | 'all' | null>(null);
+  const [browsing, setBrowsing] = useState(false);
+  const filter = selected ?? campus.data;
+  const campusId = selected === 'all' ? undefined : selected?.unitid ?? account.data?.campusId;
+  const feed = useInfiniteQuery({
+    queryKey: ['markets', campusId],
+    enabled: selected === 'all' || !!campusId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) => api.markets.list.query({ campusId, before: pageParam, limit: 20 }, { signal }),
+    getNextPageParam: (page) => page.nextCursor ?? undefined,
+    refetchInterval: 12_000,
+  });
+  const markets = feed.data?.pages.flatMap(page => page.items) ?? [];
+  const featured = markets.find(isOpen);
+  return <Page>
+    <Wordmark />
+    <View style={s.row}>
+      <Button label="All" grow tone={filter === 'all' ? 'lime' : 'quiet'} onPress={() => select('all')} />
+      <Button label="My campus" grow tone={selected === null ? 'lime' : 'quiet'} onPress={() => select(null)} />
+      <Button label={browsing ? 'Close search' : 'Find campus'} grow tone="quiet" onPress={() => setBrowsing(!browsing)} />
+    </View>
+    {browsing && <CampusSearch onSelect={campus => { select(campus); setBrowsing(false); }} />}
+    {filter && filter !== 'all' && <Text style={s.muted}>{filter.name}</Text>}
+    {account.data?.state === 'pending' && <Note>Your account is being set up. You can browse markets while you wait.</Note>}
+    {featured && <MarketCard featured market={featured} canBuy={account.data?.state === 'ready' && featured.campus.unitid === account.data.campusId} />}
+    {markets.length > (featured ? 1 : 0) && <Text style={s.label}>More markets</Text>}
+    {markets.filter(item => item !== featured).map(market => <MarketCard key={market.id} market={market} />)}
+    {(feed.isError || account.isError) ? <Button label="Retry feed" tone="quiet" onPress={() => { void account.refetch(); void feed.refetch(); }} />
+      : feed.isPending ? <Note>Loading markets…</Note> : !markets.length && <Note>No markets here yet.</Note>}
+    {feed.hasNextPage && <Button label="Load more" tone="quiet" disabled={feed.isFetchingNextPage} onPress={() => void feed.fetchNextPage()} />}
+  </Page>;
+}
