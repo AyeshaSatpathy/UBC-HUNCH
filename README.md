@@ -1,12 +1,94 @@
 # Hunch
 
-Campus prediction markets with a dollars-only Expo app, Hono/tRPC API, Postgres, Circle-managed accounts, QuickNode Streams, and Gemini Prediction Markets data.
+**Your campus. Your call.**
 
-The deployed Arc testnet contract is `0x73Dd30B231f405C1DCf0812c64dDCc5F02143D20`, chain ID `5042002`, deployed at block `72337332`. [Contract setup and manual funding](packages/contracts/README.md)
+Hunch is a campus prediction market app. Students sign in with their school email, explore questions about their campus, make predictions, and track their positions and reputation. The student experience uses dollars throughout, with a clear fee and total before every purchase.
+
+The project includes an Expo mobile app, a typed Hono/tRPC API, PostgreSQL, contracts on Arc testnet, Circle account provisioning, QuickNode event delivery, Brevo email verification, and Gemini Prediction Markets data.
+
+> Current deployment uses Arc testnet assets. The student interface presents dollar amounts. See [verification status](#verification-status) for the checks completed and the remaining end-to-end gates.
+
+## Find your way
+
+| I want to… | Go to |
+| --- | --- |
+| Install and configure the project | [Setup](#setup) |
+| Understand the components | [Architecture](#architecture) |
+| Start the app and workers | [Run the app and services](#run-the-app-and-services) |
+| Open Hunch on an iPhone | [iPhone](#iphone) |
+| Configure sign-in and school matching | [Login and campus directory](#login-and-campus-directory) |
+| Configure live event delivery | [QuickNode Streams](#quicknode-streams) |
+| Understand linked market data | [Gemini Prediction Markets](#gemini-prediction-markets) |
+| Assign a reviewer and fund a market | [Reviewer Console and market funding](#reviewer-console-and-market-funding) |
+| Test the complete experience | [Manual checklist](#manual-checklist) |
+| Fix a local setup issue | [Troubleshooting](#troubleshooting) |
+
+## What you can do
+
+- Sign in or create an account using one school-email verification flow.
+- Browse campus markets and recent activity, inspect crowd and Gemini odds, and follow price history.
+- Create a question with explicit YES/NO rules and optionally pin a matching Gemini contract.
+- Review the amount, fee, and total before confirming a purchase.
+- Track positions, collect eligible payouts or refunds, and view prediction accuracy and campus rankings.
+- Review assigned markets through a separate, access-controlled Reviewer Console.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    Student[Expo student app] --> API[Hono + tRPC API]
+    Reviewer[Reviewer Console] --> API
+    API --> DB[(PostgreSQL)]
+    API --> Brevo[Brevo email codes]
+    API --> Gemini[Gemini public market data]
+    Workers[Provisioning and operation workers] --> DB
+    Workers --> Circle[Circle managed accounts]
+    Workers --> Arc[CampusMarkets on Arc testnet]
+    Circle --> Arc
+    Arc --> Stream[QuickNode Streams]
+    Stream --> Webhook[Signed webhook]
+    Webhook --> DB
+    Consumer[Event consumer] --> DB
+```
+
+The API exposes typed reads and durable operation requests. Workers execute account setup and market actions. The event consumer turns contract events into market and portfolio views using atomic cursor advancement and event deduplication. Gemini supplies external odds and settlement evidence for linked contracts.
+
+| Directory | Responsibility |
+| --- | --- |
+| `apps/mobile` | Expo Router screens, session storage, typed API client and shared UI |
+| `apps/api/src/auth` | School email verification and sessions |
+| `apps/api/src/arc` | Indexing, provisioning, funding and operation workers |
+| `apps/api/src/seed` | Campus imports and the real-testnet lifecycle script |
+| `apps/api/migrations` | Versioned PostgreSQL schema changes |
+| `apps/api/test` | API integration and validation tests |
+| `packages/contracts` | Foundry contracts, tests, deployment and manual funding scripts |
+
+The deployed contract is `0x73Dd30B231f405C1DCf0812c64dDCc5F02143D20` on Arc testnet, chain ID `5042002`, deployment block `72337332`. [Contract setup and manual funding](packages/contracts/README.md)
 
 ## Setup
 
-Use Bun 1.4.4, Node 22.13 or later, Docker Desktop, and an Expo SDK 58-compatible client. From the repository root on this PC, add the installed runtimes to your current PowerShell session.
+### Prerequisites
+
+| Tool or account | Used for |
+| --- | --- |
+| Bun 1.4.4 | Workspace installation and scripts |
+| Node 22.13 or later | Expo tooling |
+| Docker Desktop | Local PostgreSQL |
+| Foundry | Contract builds, tests and manual signing |
+| Expo SDK 58-compatible client | iPhone preview or development build |
+| Brevo sender and API key | School email codes |
+| Circle testnet setup | Account creation and transfers |
+| QuickNode Streams access | Arc Logs delivery |
+| Public HTTPS tunnel | Delivering Stream events to the local API |
+
+Clone the repository and open its root directory.
+
+```powershell
+git clone https://github.com/AyeshaSatpathy/UBC-HUNCH.git
+cd UBC-HUNCH
+```
+
+The following PATH line is specific to the bundled runtimes on the original Windows development PC. If Bun and Node are already on your PATH, start with `bun install`.
 
 ```powershell
 $env:Path = 'C:\Program Files\nodejs;C:\UBC-HUNCH\.tools\bun-windows-x64;' + $env:Path
@@ -14,7 +96,18 @@ bun install --frozen-lockfile
 bun run db:up
 ```
 
-For a fresh checkout, copy `apps/api/.env.example` to `apps/api/.env` and populate it locally. Preserve an existing environment file. Then run the migrations and import the campus directory.
+### Configure your environment
+
+For a fresh checkout, create the private environment files once.
+
+```powershell
+Copy-Item apps/api/.env.example apps/api/.env
+Copy-Item apps/mobile/.env.example apps/mobile/.env
+```
+
+Preserve existing environment files. Fill server credentials locally using the variable reference below. Set the mobile API URL to `http://localhost:3000` for a PC browser, or your PC's Wi-Fi address for a physical phone. Set `CORS_ORIGINS` to the exact browser origins you use, including the port. The example permits `http://localhost:8081` and `http://localhost:8082`.
+
+Then initialize the database.
 
 ```powershell
 bun run db:migrate
@@ -51,7 +144,19 @@ Gemini market-data endpoints used here are public and require no Gemini trading 
 
 ## Run the app and services
 
-Run each long-lived command in its own terminal from the repo root.
+For a browser preview, start Postgres, the API, and Expo. Account creation and market actions also need their respective workers. Run each long-lived command in its own terminal from the repo root.
+
+| Service | When it is needed |
+| --- | --- |
+| API | All app requests and webhook delivery |
+| Expo | Student app development and preview |
+| Stream consumer | Updating market, activity and portfolio projections |
+| Provisioning worker | New student accounts and starting credits |
+| Student operations worker | Publishing, purchases, predictions and resolutions |
+| Automatic funding worker | Opening eligible reviewer-assigned drafts |
+| Gemini sampler | Accumulating odds observations over time |
+
+Workers can submit testnet transactions when queued work exists. Run the services needed for the flow you are testing.
 
 ```powershell
 # API
@@ -77,6 +182,8 @@ bun run dev:mobile --go --lan
 ```
 
 The funding worker checks the deployed LP address and allocation cap. It considers directory-campus drafts with assigned reviewers, simulates the funding call, persists the signed transaction before broadcast, and logs each confirmed or reverted receipt. A database lock serializes reservations across workers. It signs funding calls only. Stop this worker and reconcile any pending transaction before using the LP through the [manual fallback script](packages/contracts/script/fund-market.ps1).
+
+Expo prints the active port and QR code. Open the printed localhost URL for a browser preview. If it selects a new port, add that origin to `CORS_ORIGINS` and restart the API before requesting a code.
 
 For a read-only historical backfill or repair run, use `bun run arc:index`. This reads finalized Arc events from the stored cursor through the current head using RPC. The primary continuous consumer uses `--streams`. Neither mode submits purchases.
 
@@ -127,7 +234,7 @@ The app polls Stream-backed activity every five seconds and campus leaderboard s
 
 ### Localhost and the public destination
 
-QuickNode cannot deliver to a localhost or private Wi-Fi address. On the PC, run the API and then run this tunnel command yourself, or explicitly authorize opening a tunnel.
+QuickNode needs a publicly reachable HTTPS destination. Start the local API, then run the tunnel in another terminal.
 
 ```powershell
 ngrok http 3000
@@ -202,7 +309,7 @@ Automatic funding then opens eligible drafts. The last verified vault balance wa
 
 Run `bun run typecheck`, `bun run test`, and `bun run --cwd apps/mobile lint`. API tests require the migrated and seeded local database. `/health` checks the process, `/ready` checks Postgres, and `GET /webhooks/quicknode` reports whether Stream verification is configured.
 
-- Verified locally in this build, eight API tests, 75 assertions, both workspace typechecks, Expo lint, and the production web export.
+- The cleanup verification passed eight API tests with 75 assertions, all 16 Foundry contract tests (including 256 fuzz runs), both workspace typechecks, and Expo lint. The production web export passed during the preceding UI verification.
 - Browser walkthrough used isolated responses for email login, session restore, logout, purchase response recovery, claim collection, publishing, and Gemini linking with locked terms. It submitted no live purchase.
 - Gemini's real settled response was fetched and accepted by the adapter. Pure settlement tests reject changed IDs, tickers, rules, pending and invalid statuses, and absent explicit outcomes.
 - Stream receiver tests verify HMAC rejection and duplicate delivery handling. The hosted Arc Logs filter returned the historical vault-deposit event correctly. Real signed QuickNode deliveries reached the Postgres inbox, and public requests with missing or incorrect signatures returned HTTP 401.
@@ -220,3 +327,56 @@ Run `bun run typecheck`, `bun run test`, and `bun run --cwd apps/mobile lint`. A
 6. After trading closes and Gemini explicitly settles, open the separate Reviewer Console. It should show only the reviewer's assignments and permit only Gemini's matching outcome. Add a public reference and submit.
 7. In Portfolio, collect the payout or refund once. Confirm the new balance and that the collect button no longer offers a duplicate claim. Check prediction accuracy after a free prediction settles.
 8. Temporarily disconnect the API and Gemini connectivity. Confirm errors, retry buttons, and blocked resolution controls. Restore connectivity and verify recovery.
+
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| Send code fails in the browser | Check `/ready`, the app's API URL, and `CORS_ORIGINS`. The allowed origin must include the current Expo port. Restart the API after changing `.env`. |
+| Email does not arrive | Verify the Brevo sender and API key locally, check Inbox and Spam, and wait at least one minute before resending. Codes expire after ten minutes. |
+| School domain is unsupported | Directory search covers more schools than the verified domain mapping. Check the imported domain's UNITID mapping. Existing accounts retain their stored campus. |
+| Phone cannot connect | Use the PC's Wi-Fi IPv4 address in `EXPO_PUBLIC_API_URL`, join the same network, allow local network access, and open the API `/ready` URL in phone Safari. |
+| Expo reports a version mismatch | Install an SDK-compatible client or build a compatible development client. |
+| API reports database unavailable | Start Docker, run `bun run db:up`, check the configured port, and apply migrations. |
+| Account remains in setup | Check the provisioning worker, Circle configuration, registrar signer, treasury balance and operation status. |
+| Market stays awaiting funding | Confirm a separate approved reviewer is assigned, the funding worker is running, the vault has funds and the four-market limit has room. |
+| An action stays processing | Check the operations worker and event consumer. Reopen Portfolio to resume status checks. Inspect the existing operation before submitting another request. |
+| Activity stops updating | Check the tunnel, Stream destination, Stream status, API and consumer. A missing batch prevents the contiguous cursor from advancing. |
+| Stream setup returns an existing Stream | Its stable external ID makes creation idempotent. Update destination settings on the existing Stream when the tunnel changes. |
+| Gemini chart has little history | Keep the sampler running. The chart can display only upstream history and observations already collected. |
+| Reviewer cannot submit | Check assignment, trading close, evidence deadline and the pinned Gemini status. Linked markets require a matching explicit settled outcome. |
+| Public RPC returns 429 | The backfill retries with increasing delays. Resume from the saved cursor if it exits after exhausting retries. |
+
+## Development checks
+
+Run these from the repository root with the migrated local database available.
+
+```powershell
+bun run typecheck
+bun run test
+bun run --cwd apps/mobile lint
+```
+
+Run contract checks from `packages/contracts` with Foundry on PATH.
+
+```powershell
+forge build
+forge test -vv
+```
+
+The real-testnet seed entry point is `bun run --cwd apps/api seed:arc`. Review its prerequisites and signing steps in the [contract documentation](packages/contracts/README.md) before running it. It performs real testnet actions and is separate from the local API tests.
+
+### Repository hygiene
+
+Private `.env` files, local tools, keystores, build outputs, Foundry caches and broadcast files are gitignored. Commit `.env.example` templates with variable names and safe defaults. Keep signing material in local environment files or a server secret store.
+
+Preserve PostgreSQL data across restarts. Sessions, provisioning progress, operation identities, the event cursor and the automatic funding limit depend on that state.
+
+## Project references
+
+- [Original build specification](CAMPUS_MARKETS_SPEC.md)
+- [Staged project plan](CAMPUS_MARKETS_PLAN.md)
+- [Contract setup and deployment](packages/contracts/README.md)
+- [Stage 1 verification report](packages/contracts/STAGE_1_REPORT.md)
+
+The original specification records the initial scope. The implementation and this README reflect subsequent decisions, including school email login, backend-managed signing, dollars in the student UI, a separate reviewer console, and removal of voice features.
