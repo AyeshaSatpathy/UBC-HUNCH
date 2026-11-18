@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "./db";
-import { accounts, arcEvents, arcMarkets, campuses } from "./schema";
+import { arcEvents, arcMarkets, campuses } from "./schema";
 import { chainId, market } from "./arc/contract";
 
 export async function activity(db: Database, campusId?: number) {

@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { isDeepStrictEqual } from "node:util";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { BaseError, ContractFunctionRevertedError, encodeFunctionData, keccak256, parseEventLogs, toHex, type Address, type Hash } from "viem";
 import type { Database } from "../db";
@@ -45,7 +46,7 @@ export async function startStudentOperation(db: Database, account: Account, requ
     const owned = eq(studentOperations.accountId, account.id);
     const [prior] = await tx.select().from(studentOperations).where(and(owned, eq(studentOperations.requestKey, requestKey)));
     if (prior) {
-      if (JSON.stringify(prior.input, Object.keys(prior.input).sort()) !== JSON.stringify(input, Object.keys(input).sort())) {
+      if (!isDeepStrictEqual(prior.input, input)) {
         throw new TRPCError({ code: "CONFLICT", message: "That request was already used." });
       }
       return publicOperation(prior);

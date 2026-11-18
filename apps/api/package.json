@@ -23,6 +23,7 @@
     "arc:auto-fund": "bun src/arc/run-auto-funding.ts",
     "arc:reviewer": "bun src/arc/set-reviewer.ts",
     "stream:configure": "bun src/configure-stream.ts",
+    "gemini:sync": "bun src/sync-gemini.ts",
     "arc:provision-treasury": "bun src/arc/provision-treasury.ts"
   },
   "dependencies": {

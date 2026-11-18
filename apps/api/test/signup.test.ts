@@ -83,6 +83,10 @@ test("school code verification is single-use, rate limited, and reuses the same 
     expect(await api.actions.pending.query()).toEqual([one]);
     await expect(api.markets.create.mutate({ ...draft, requestKey: randomUUID() })).rejects.toThrow("already have an action");
     await expect(api.markets.create.mutate({ ...draft, question: "Different question?" })).rejects.toThrow("already used");
+    const [signedAccount] = await db.select().from(accounts).where(eq(accounts.email, email));
+    await db.update(sessions).set({ expiresAt: new Date(0) }).where(eq(sessions.accountId, signedAccount.id));
+    await expect(api.auth.me.query()).rejects.toThrow("UNAUTHORIZED");
+    await db.update(sessions).set({ expiresAt: new Date(Date.now() + 60_000) }).where(eq(sessions.accountId, signedAccount.id));
     await api.auth.signOut.mutate();
     await expect(api.auth.me.query()).rejects.toThrow("UNAUTHORIZED");
   } finally {

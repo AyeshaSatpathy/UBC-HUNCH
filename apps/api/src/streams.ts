@@ -22,6 +22,7 @@ const payload = z.object({
 export function streamRoutes(db: Database) {
   const app = new Hono();
   app.use("*", bodyLimit({ maxSize: 2_000_000 }));
+  app.get("/", c => c.json({ configured: !!process.env.QUICKNODE_STREAM_SECURITY_TOKEN }));
   app.post("/", async c => {
     const secret = process.env.QUICKNODE_STREAM_SECURITY_TOKEN;
     if (!secret) return c.json({ error: "Stream verification is not configured" }, 503);

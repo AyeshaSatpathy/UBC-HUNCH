@@ -9,7 +9,9 @@ export default function Profile() {
   const account = useAccount();
   const campus = useCampus(account.data?.campusId);
   const portfolio = usePortfolio();
-  const signOut = useMutation({ mutationFn: async () => { await api.auth.signOut.mutate(); await setSession(null); } });
+  const signOut = useMutation({ mutationFn: async () => {
+    try { await api.auth.signOut.mutate(); } finally { await setSession(null); }
+  } });
   const history = portfolio.data?.positions.filter(position => position.prediction) ?? [];
   const scored = history.filter(({ market }) => market.status === 'yes' || market.status === 'no');
   const correct = scored.filter(({ market, prediction }) => market.status.toUpperCase() === prediction).length;

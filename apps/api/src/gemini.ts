@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "./db";
 import { geminiLinks, geminiOdds } from "./schema";
@@ -103,9 +103,9 @@ export async function marketGemini(db: Database, marketId: string) {
   if (yesPercent !== null) points.push({ contractId: pin.contractId, at: new Date(Math.floor(Date.now() / 60_000) * 60_000), yes: yesPercent });
   for (const point of points) await db.insert(geminiOdds).values(point).onConflictDoNothing();
   const history = await db.select({ at: geminiOdds.at, yes: geminiOdds.yes }).from(geminiOdds)
-    .where(eq(geminiOdds.contractId, pin.contractId)).orderBy(geminiOdds.at).limit(500);
+    .where(eq(geminiOdds.contractId, pin.contractId)).orderBy(desc(geminiOdds.at)).limit(500);
   let outcome: "YES" | "NO" | null = null;
   try { outcome = settledOutcome(pin, event, contract); } catch { /* Pending/invalid outcomes stay unavailable. */ }
   return { ticker: pin.eventTicker + "/" + pin.ticker, contractId: pin.contractId, yesPercent, outcome,
-    status: contract.status, history: history.map(item => ({ at: item.at.toISOString(), yes: item.yes })) };
+    status: contract.status, history: history.reverse().map(item => ({ at: item.at.toISOString(), yes: item.yes })) };
 }
