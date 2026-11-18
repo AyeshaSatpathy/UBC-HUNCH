@@ -8,6 +8,7 @@ import { getMarket, listMarkets, portfolio, previewClaim, quoteMarket } from "./
 import { claimStatus, submitClaim } from "./arc/claims";
 import { advanceStudentOperation, pendingStudentOperations, startStudentOperation } from "./arc/student-operations";
 import { activity, leaderboard } from "./activity";
+import { marketGemini, searchGemini } from "./gemini";
 
 const t = initTRPC.context<{ db: Database; authorization?: string; requester: string }>().create();
 const signedIn = t.procedure.use(async ({ ctx, next }) => {
@@ -22,7 +23,18 @@ const side = z.enum(["YES", "NO"]);
 const cents = z.number().int().positive().max(1_000_000_000);
 const requestKey = z.string().regex(/^[\w-]{12,80}$/);
 const text = z.string().trim().min(1).max(500);
+const pin = z.object({ eventTicker: z.string().min(1).max(150), contractId: z.string().min(1).max(150),
+  ticker: z.string().min(1).max(150), fingerprint: z.string().regex(/^[a-f0-9]{64}$/) });
 export const appRouter = t.router({
+  gemini: t.router({
+    search: t.procedure.input(z.object({ query: z.string().trim().min(2).max(120) }))
+      .query(({ input }) => searchGemini(input.query)),
+    market: t.procedure.input(marketInput).query(async ({ ctx, input }) => {
+      await getMarket(ctx.db, input.marketId);
+      try { return await marketGemini(ctx.db, input.marketId); }
+      catch { throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Gemini odds are temporarily unavailable." }); }
+    }),
+  }),
   activity: t.procedure.input(z.object({ campusId: campusId.optional() }))
     .query(({ ctx, input }) => activity(ctx.db, input.campusId)),
   leaderboard: t.procedure.input(z.object({ campusId: campusId.optional() }))
@@ -62,8 +74,9 @@ export const appRouter = t.router({
       .mutation(({ ctx, input: { requestKey, ...input } }) =>
         startStudentOperation(ctx.db, ctx.session.account, requestKey, { kind: "predict", ...input })),
     create: signedIn.input(z.object({
-      requestKey, question: text, source: text, yesRule: text, noRule: text,
+      requestKey, question: text, source: text, yesRule: z.string().trim().min(1).max(16000), noRule: text,
       close: z.number().int().positive(), deadline: z.number().int().positive(),
+      gemini: pin.optional(),
     })).mutation(({ ctx, input: { requestKey, ...input } }) =>
       startStudentOperation(ctx.db, ctx.session.account, requestKey, { kind: "create", ...input })),
   }),

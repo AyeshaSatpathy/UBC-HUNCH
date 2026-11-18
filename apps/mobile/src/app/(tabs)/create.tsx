@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { actionKey, dateLabel, studentError, useAccount, useAction, useCampus, useSession } from '../../api';
 import { Button, ErrorNotice, Loading, Note, Page, c, s } from '../../ui';
+import { GeminiSearch, type GeminiChoice } from '../../gemini';
 
 const fields = [
   ['question', 'Question', 'Will the campus café extend its hours?'],
@@ -31,6 +32,7 @@ function parseDate(value: string) {
 export default function Create() {
   const [form, setForm] = useState(() => ({ question: '', source: '', yesRule: '', noRule: '', closesAt: localDate(2), evidenceAt: localDate(4) }));
   const [review, setReview] = useState(false);
+  const [gemini, setGemini] = useState<GeminiChoice>();
   const [error, setError] = useState('');
   const { api } = useSession();
   const client = useQueryClient();
@@ -47,6 +49,7 @@ export default function Create() {
         requestKey: key.current.value, question: form.question, source: form.source,
         yesRule: form.yesRule, noRule: form.noRule, close: Math.floor(parseDate(form.closesAt) / 1000),
         deadline: Math.floor(parseDate(form.evidenceAt) / 1000),
+        gemini: gemini ? { eventTicker: gemini.eventTicker, contractId: gemini.contractId, ticker: gemini.ticker, fingerprint: gemini.fingerprint } : undefined,
       });
     },
     onSuccess: (result) => setRequest(result.id),
@@ -73,10 +76,23 @@ export default function Create() {
     {account.isPending && <Loading>Checking your account…</Loading>}
     {account.isError && <ErrorNotice retry={() => void account.refetch()}>Couldn’t load your account.</ErrorNotice>}
     {account.data?.state === 'pending' && <Note>You can draft a market while your account is being set up.</Note>}
+    {!review && !gemini && <GeminiSearch onSelect={item => {
+      setGemini(item);
+      setForm(previous => ({ ...previous, question: item.question, source: item.source, yesRule: item.yesRule, noRule: item.noRule }));
+    }} />}
+    {gemini && <View style={s.panel}>
+      <Text style={s.label}>Linked Gemini contract</Text>
+      <Text selectable style={s.body}>{gemini.eventTicker} / {gemini.ticker}</Text>
+      <Text selectable style={s.muted}>{gemini.contractId}</Text>
+      <Text style={s.muted}>The question and rules must match Gemini. Close trading by {dateLabel(String(gemini.expiry))} and set a later evidence deadline.</Text>
+      {!review && <Button label="Unlink Gemini" tone="quiet" onPress={() => setGemini(undefined)} />}
+    </View>}
     {fields.map(([key, label, placeholder]) => <View key={key} style={s.field}>
       <Text style={s.label}>{label}</Text>
       {review ? <Text style={s.body}>{key.endsWith('At') ? dateLabel(String(parseDate(form[key]) / 1000)) : form[key]}</Text>
-        : <TextInput accessibilityLabel={label} value={form[key]} maxLength={500} onChangeText={value => setForm(previous => ({ ...previous, [key]: value }))} placeholder={placeholder} placeholderTextColor={c.muted} style={s.input} />}
+        : <TextInput accessibilityLabel={label} value={form[key]} editable={!gemini || key.endsWith('At')}
+          maxLength={key === 'yesRule' ? 16000 : 500} multiline={!key.endsWith('At')}
+          onChangeText={value => setForm(previous => ({ ...previous, [key]: value }))} placeholder={placeholder} placeholderTextColor={c.muted} style={s.input} />}
     </View>)}
     {(error || create.error || operation.data?.status === 'failed') && <ErrorNotice>
       {error || studentError(create.error, 'Publishing didn’t go through. Try again.')}
@@ -89,6 +105,7 @@ export default function Create() {
         router.push({ pathname: '/market/[id]', params: { id: resultId } });
         setRequest(undefined);
         setReview(false);
+        setGemini(undefined);
         setForm({ question: '', source: '', yesRule: '', noRule: '', closesAt: localDate(2), evidenceAt: localDate(4) });
       }} />
     </> : <>

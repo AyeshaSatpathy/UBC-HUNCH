@@ -71,7 +71,8 @@ export type StudentOperationInput =
   | { kind: "buy"; marketId: string; side: "YES" | "NO"; cents: number; shares: string }
   | { kind: "predict"; marketId: string; side: "YES" | "NO" }
   | { kind: "resolve"; marketId: string; side: "YES" | "NO"; reference: string }
-  | { kind: "create"; question: string; source: string; yesRule: string; noRule: string; close: number; deadline: number };
+  | { kind: "create"; question: string; source: string; yesRule: string; noRule: string; close: number; deadline: number;
+      gemini?: { eventTicker: string; contractId: string; ticker: string; fingerprint: string } };
 
 export const studentOperations = pgTable("student_operations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -86,6 +87,20 @@ export const studentOperations = pgTable("student_operations", {
 
 const block = (name: string) => bigint(name, { mode: "bigint" });
 const units = (name: string) => numeric(name, { precision: 78, scale: 0 });
+
+export const geminiLinks = pgTable("gemini_links", {
+  marketId: units("market_id").primaryKey(),
+  eventTicker: text("event_ticker").notNull(),
+  contractId: text("contract_id").notNull(),
+  ticker: text("ticker").notNull(),
+  fingerprint: text("fingerprint").notNull(),
+});
+
+export const geminiOdds = pgTable("gemini_odds", {
+  contractId: text("contract_id").notNull(),
+  at: date("at").notNull(),
+  yes: integer("yes").notNull(),
+}, (table) => [primaryKey({ columns: [table.contractId, table.at] })]);
 
 export const streamBatches = pgTable("stream_batches", {
   digest: text("digest").primaryKey(),

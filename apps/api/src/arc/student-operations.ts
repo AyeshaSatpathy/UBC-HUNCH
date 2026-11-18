@@ -2,7 +2,8 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { BaseError, ContractFunctionRevertedError, encodeFunctionData, keccak256, parseEventLogs, toHex, type Address, type Hash } from "viem";
 import type { Database } from "../db";
-import { accounts, studentOperations, type StudentOperationInput } from "../schema";
+import { accounts, geminiLinks, studentOperations, type StudentOperationInput } from "../schema";
+import { describe, getGeminiContract, requireGeminiOutcome } from "../gemini";
 import { collateralAbi, createArcClient, market, marketAbi, usdc } from "./contract";
 import { centsToUnits, getMarket, quoteMarket } from "./market-api";
 
@@ -55,7 +56,19 @@ export async function startStudentOperation(db: Database, account: Account, requ
       if (input.close <= Date.now() / 1_000 || input.deadline <= input.close) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Choose a future trading close and a later evidence deadline." });
       }
+      if (input.gemini) {
+        const { event, contract } = await getGeminiContract(input.gemini.eventTicker, input.gemini.contractId, true);
+        const canonical = describe(event, contract);
+        if (contract.status !== "active" || event.status !== "active" || !canonical.yesRule ||
+          canonical.fingerprint !== input.gemini.fingerprint || canonical.ticker !== input.gemini.ticker ||
+          input.question !== canonical.question || input.source !== canonical.source ||
+          input.yesRule !== canonical.yesRule || input.noRule !== canonical.noRule ||
+          input.close > canonical.expiry || input.deadline <= canonical.expiry) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Use the pinned Gemini terms and a deadline after the linked event expires." });
+        }
+      }
     } else if (input.kind === "resolve") {
+      await requireGeminiOutcome(db, input.marketId, input.side);
       await requireResolution(account, address, input);
     } else {
       const item = await getMarket(db, input.marketId, address);
@@ -128,7 +141,10 @@ export async function advanceStudentOperation(db: Database, account: Account, id
       if (op.input.kind === "resolve") {
         const [reviewer] = await tx.select({ isReviewer: accounts.isReviewer }).from(accounts)
           .where(eq(accounts.id, account.id)).for("share");
-        try { await requireResolution({ ...account, isReviewer: reviewer?.isReviewer ?? false }, address, op.input); }
+        try {
+          await requireGeminiOutcome(db, op.input.marketId, op.input.side);
+          await requireResolution({ ...account, isReviewer: reviewer?.isReviewer ?? false }, address, op.input);
+        }
         catch (error) {
           if (error instanceof TRPCError) return save({ stage: "failed" });
           throw error;
@@ -165,6 +181,9 @@ export async function advanceStudentOperation(db: Database, account: Account, id
     if (input.kind === "create") {
       const event = parseEventLogs({ abi: marketAbi, eventName: "MarketCreated", logs })
         .find(({ args }) => args.creator.toLowerCase() === address && args.campus === BigInt(account.unitid));
+      if (event && input.gemini) {
+        await tx.insert(geminiLinks).values({ marketId: event.args.id.toString(), ...input.gemini }).onConflictDoNothing();
+      }
       return save(event ? { stage: "confirmed", resultMarketId: event.args.id.toString() } : { stage: "failed" });
     }
     const valid = input.kind === "buy"

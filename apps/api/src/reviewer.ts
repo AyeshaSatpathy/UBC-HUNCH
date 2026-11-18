@@ -8,6 +8,7 @@ import { html } from "hono/html";
 import { z } from "zod";
 import { chainId, market } from "./arc/contract";
 import { startStudentOperation } from "./arc/student-operations";
+import { marketGemini } from "./gemini";
 import { beginVerification, finishVerification, getSession, schoolEmail } from "./auth/accounts";
 import type { Database } from "./db";
 import { accounts, arcMarkets, emailChallenges, sessions, studentOperations } from "./schema";
@@ -129,23 +130,31 @@ export function reviewerRoutes(db: Database, requestIp?: (request: Request) => s
     ]);
     const now = BigInt(Math.floor(Date.now() / 1_000));
     const status = (row: typeof arcMarkets.$inferSelect) => ["Awaiting funding", "Trading open", "YES settled", "NO settled", "Voided"][row.status];
+    const geminiStatus = new Map<string, { outcome: "YES" | "NO" | null; status: string; ticker: string; contractId: string } | null>(await Promise.all(assigned.map(async row => {
+      try { return [row.marketId, await marketGemini(db, row.marketId)] as const; }
+      catch { return [row.marketId, { outcome: null, status: "Unavailable", ticker: "Pinned Gemini contract", contractId: "" }] as const; }
+    })));
     return c.html(page(html`
       <p>Assigned markets</p><a href="/reviewer">Refresh statuses</a>
       ${!assigned.length && html`<p>No markets assigned.</p>`}
       ${assigned.map(row => {
         const last = operations.find(op => op.input.kind === "resolve" && op.input.marketId === row.marketId);
+        const gemini = geminiStatus.get(row.marketId);
         const canSubmit = row.status === 1 && now >= BigInt(row.closesAt) && now < BigInt(row.evidenceDeadline) &&
-          !!session.account.fundedAt && last?.stage !== "submit" && last?.stage !== "confirmed";
+          !!session.account.fundedAt && last?.stage !== "submit" && last?.stage !== "confirmed" && (!gemini || !!gemini.outcome);
         return html`<article>
           <h2>${row.question}</h2><p><strong>Source</strong> ${row.source}</p>
           <p><strong>Evidence deadline</strong> ${dateLabel(row.evidenceDeadline)}</p>
+          ${gemini && html`<p><strong>Gemini</strong> ${gemini.ticker} · ${gemini.contractId} · ${gemini.outcome ? "Settled " + gemini.outcome : gemini.status + " — submission blocked"}</p>`}
           <p>${row.status === 1 && now >= BigInt(row.closesAt) ? (now >= BigInt(row.evidenceDeadline) ? "Deadline passed" : "Ready for review") : status(row)}</p>
           ${last?.input.kind === "resolve" && html`<p>${last.stage === "confirmed" ? "Resolution confirmed" :
             last.stage === "failed" ? "Resolution failed" : "Resolution queued"} · ${last.input.side} · ${last.input.reference}</p>`}
           ${canSubmit && html`<form method="post" action="/reviewer/resolve">
             <input type="hidden" name="marketId" value="${row.marketId}"><input type="hidden" name="requestKey" value="${randomUUID()}">
             <label for="side-${row.marketId}">Outcome</label>
-            <select id="side-${row.marketId}" name="side" required><option value="">Choose YES or NO</option><option>YES</option><option>NO</option></select>
+            <select id="side-${row.marketId}" name="side" required>
+              ${gemini?.outcome ? html`<option>${gemini.outcome}</option>` : html`<option value="">Choose YES or NO</option><option>YES</option><option>NO</option>`}
+            </select>
             <label for="reference-${row.marketId}">Public evidence reference</label>
             <input id="reference-${row.marketId}" name="reference" maxlength="500" required>
             <button>Submit resolution</button>

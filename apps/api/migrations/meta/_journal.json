@@ -57,6 +57,13 @@
       "when": 1795029638855,
       "tag": "0007_stream_batches",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795029863607,
+      "tag": "0008_gemini_contracts",
+      "breakpoints": true
     }
   ]
 }

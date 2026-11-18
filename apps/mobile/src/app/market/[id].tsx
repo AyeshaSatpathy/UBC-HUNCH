@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { actionKey, dateLabel, isOpen, money, shares, statusLabel, studentError, type Side, useAccount, useAction, usePortfolio, useSession } from '../../api';
 import { BuyButtons } from '../../markets';
+import { GeminiOdds } from '../../gemini';
 import { Button, ErrorNotice, Loading, Page, s } from '../../ui';
 
 export default function Detail() {
@@ -45,6 +46,7 @@ export default function Detail() {
     <Text style={s.muted}>{market.campus.name} · {statusLabel(market)}</Text>
     <Text accessibilityRole="header" style={s.heading}>{market.question}</Text>
     {market.status === 'draft' && <Text selectable style={s.muted}>Market #{market.id}</Text>}
+    <GeminiOdds marketId={id} crowd={market.yesPercent} />
     <View style={s.panel}>
       {open && <Text style={s.label}>{market.yesPercent}% YES · {100 - market.yesPercent}% NO</Text>}
       <Text style={s.muted}>Trading closes {dateLabel(market.closesAtUnix)}</Text>
