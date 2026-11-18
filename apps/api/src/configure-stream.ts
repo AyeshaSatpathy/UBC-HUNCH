@@ -10,7 +10,16 @@ const response = await fetch("https://api.quicknode.com/streams/rest/v1/streams"
   body: JSON.stringify({
     name: "Hunch CampusMarkets Arc", external_id: "hunch-campusmarkets-5042002-v1",
     network: "arc-testnet", dataset: "logs", region: "usa_east", dataset_batch_size: 100,
-    elastic_batch_enabled: true, destination: "webhook", destination_attributes: { url: destination, compression: "none", security_token: securityToken },
+    elastic_batch_enabled: true,
+    destination: "webhook",
+    destination_attributes: {
+      url: destination,
+      compression: "none",
+      security_token: securityToken,
+      max_retry: 10,
+      retry_interval_sec: 5,
+      post_timeout_sec: 10,
+    },
     status: "paused", start_range: 72337332, fix_block_reorgs: 0, keep_distance_from_tip: 0,
     filter_function: Buffer.from(filter).toString("base64"),
   }),
