@@ -5,7 +5,7 @@ const env = z
   .object({
     DATABASE_URL: z.string().url(),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-    CORS_ORIGINS: z.string().default("http://localhost:8081"),
+    CORS_ORIGINS: z.string().default("http://localhost:8081,http://localhost:8082"),
   })
   .parse(process.env);
 const { db, client } = connectDatabase(env.DATABASE_URL);
