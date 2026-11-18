@@ -87,6 +87,14 @@ export const studentOperations = pgTable("student_operations", {
 const block = (name: string) => bigint(name, { mode: "bigint" });
 const units = (name: string) => numeric(name, { precision: 78, scale: 0 });
 
+export const streamBatches = pgTable("stream_batches", {
+  digest: text("digest").primaryKey(),
+  startBlock: block("start_block").notNull(),
+  endBlock: block("end_block").notNull(),
+  logs: jsonb("logs").$type<Record<string, unknown>[]>().notNull(),
+  receivedAt: date("received_at").notNull().defaultNow(),
+});
+
 export const autoFunding = pgTable("auto_funding", {
   chainId: integer("chain_id").notNull(),
   contract: text("contract").notNull(),

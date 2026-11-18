@@ -1,7 +1,7 @@
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gte, lte, sql, type SQL } from "drizzle-orm";
 import { decodeEventLog, zeroAddress, zeroHash } from "viem";
 import type { Database } from "../db";
-import { arcCursors, arcEvents, arcMarkets, arcPositions } from "../schema";
+import { arcCursors, arcEvents, arcMarkets, arcPositions, streamBatches } from "../schema";
 import { chainId, createArcClient, deploymentBlock, market, marketAbi } from "./contract";
 
 async function readLogs(rpc: ReturnType<typeof createArcClient>, fromBlock: bigint, toBlock: bigint) {
@@ -144,7 +144,7 @@ async function loadMarketTerms(rpc: ReturnType<typeof createArcClient>, events: 
   return result;
 }
 
-export async function indexThroughHead(db: Database, rpc: ReturnType<typeof createArcClient>, shouldStop = () => false) {
+export async function indexThroughHead(db: Database, rpc: ReturnType<typeof createArcClient>, shouldStop = () => false, streamsOnly = false) {
   if (await rpc.getChainId() !== chainId) throw new Error("Expected Arc testnet RPC");
   await db.insert(arcCursors).values({ ...chain, nextBlock: deploymentBlock }).onConflictDoNothing();
   const { number: head } = await rpc.getBlock({ blockTag: "finalized", includeTransactions: false });
@@ -157,8 +157,18 @@ export async function indexThroughHead(db: Database, rpc: ReturnType<typeof crea
     if (from > head || shouldStop()) return { nextBlock: from, inserted };
 
     // Arc finalizes blocks before exposing them on the EL RPC. Keep requests within the public provider's range limit.
-    const end = from + 999n > head ? head : from + 999n;
-    const events = (await readLogsWithBackoff(rpc, from, end)).sort((a, b) =>
+    const [batch] = streamsOnly ? await db.select().from(streamBatches)
+      .where(and(lte(streamBatches.startBlock, from), gte(streamBatches.endBlock, from)))
+      .orderBy(asc(streamBatches.endBlock)).limit(1) : [];
+    if (streamsOnly && !batch) return { nextBlock: from, inserted };
+    const end = batch ? batch.endBlock : from + 999n > head ? head : from + 999n;
+    if (end > head) return { nextBlock: from, inserted };
+    const streamed = batch?.logs.map(log => ({
+      ...log, blockNumber: BigInt(String(log.blockNumber)), logIndex: Number(BigInt(String(log.logIndex))),
+      transactionIndex: Number(BigInt(String(log.transactionIndex ?? "0"))),
+      ...decodeEventLog({ abi: marketAbi, data: log.data as `0x${string}`, topics: log.topics as [`0x${string}`, ...`0x${string}`[]] }),
+    })) as Event[] | undefined;
+    const events = (streamed ?? await readLogsWithBackoff(rpc, from, end)).filter(event => event.blockNumber >= from).sort((a, b) =>
       a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : a.blockNumber < b.blockNumber ? -1 : 1);
     const created = await loadMarketTerms(rpc, events);
     inserted += await db.transaction(async (tx) => {

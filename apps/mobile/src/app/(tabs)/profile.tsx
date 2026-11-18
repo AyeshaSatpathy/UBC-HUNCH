@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Text, View } from 'react-native';
 import { useAccount, useCampus, usePortfolio, useSession } from '../../api';
@@ -13,6 +13,7 @@ export default function Profile() {
   const history = portfolio.data?.positions.filter(position => position.prediction) ?? [];
   const scored = history.filter(({ market }) => market.status === 'yes' || market.status === 'no');
   const correct = scored.filter(({ market, prediction }) => market.status.toUpperCase() === prediction).length;
+  const board = useQuery({ queryKey: ['leaderboard'], queryFn: ({ signal }) => api.leaderboard.query({}, { signal }), refetchInterval: 10_000 });
   return <Page tabbed>
     <Text accessibilityRole="header" style={s.heading}>Reputation</Text>
     {campus.data && <View style={[s.panel, s.row]}><Icon name="location" color={c.lime} /><Text style={s.body}>{campus.data.name}</Text></View>}
@@ -32,6 +33,14 @@ export default function Profile() {
         market.status === 'yes' || market.status === 'no' ? (prediction === market.status.toUpperCase() ? 'Correct' : 'Incorrect') : 'Pending'}</Text>
     </View>)}
     <Button label="Find a market" tone="quiet" onPress={() => router.navigate('/feed')} />
+    <Text style={s.label}>Campus leaderboard</Text>
+    {board.isPending ? <Loading>Loading campus stats…</Loading> :
+      board.isError ? <ErrorNotice retry={() => void board.refetch()}>Couldn’t load campus stats.</ErrorNotice> :
+      !board.data.length ? <Note>Campus activity will appear here.</Note> :
+      board.data.map(item => <View key={item.campusId} style={s.panel}>
+        <Text style={s.label}>{item.campus}</Text>
+        <Text style={s.body}>{item.purchases} purchases · {item.markets} markets · {item.participants} participants</Text>
+      </View>)}
     <Button label={signOut.isPending ? 'Signing out…' : 'Sign out'} tone="quiet" disabled={signOut.isPending} onPress={() => signOut.mutate()} />
     {signOut.error && <ErrorNotice>Couldn’t sign out. Try again.</ErrorNotice>}
   </Page>;

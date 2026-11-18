@@ -13,7 +13,7 @@ process.once("SIGTERM", () => { stopping = true; });
 
 try {
   do {
-    const result = await indexThroughHead(db, rpc, () => stopping);
+    const result = await indexThroughHead(db, rpc, () => stopping, process.argv.includes("--streams"));
     if (result.inserted || !follow) {
       console.log(`Indexed ${result.inserted} new events through Arc block ${result.nextBlock - 1n}.`);
     }

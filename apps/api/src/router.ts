@@ -7,6 +7,7 @@ import { beginVerification, finishVerification, getSession, schoolEmail } from "
 import { getMarket, listMarkets, portfolio, previewClaim, quoteMarket } from "./arc/market-api";
 import { claimStatus, submitClaim } from "./arc/claims";
 import { advanceStudentOperation, pendingStudentOperations, startStudentOperation } from "./arc/student-operations";
+import { activity, leaderboard } from "./activity";
 
 const t = initTRPC.context<{ db: Database; authorization?: string; requester: string }>().create();
 const signedIn = t.procedure.use(async ({ ctx, next }) => {
@@ -22,6 +23,10 @@ const cents = z.number().int().positive().max(1_000_000_000);
 const requestKey = z.string().regex(/^[\w-]{12,80}$/);
 const text = z.string().trim().min(1).max(500);
 export const appRouter = t.router({
+  activity: t.procedure.input(z.object({ campusId: campusId.optional() }))
+    .query(({ ctx, input }) => activity(ctx.db, input.campusId)),
+  leaderboard: t.procedure.input(z.object({ campusId: campusId.optional() }))
+    .query(({ ctx, input }) => leaderboard(ctx.db, input.campusId)),
   auth: t.router({
     requestCode: t.procedure.input(z.object({ email: schoolEmail, campusId: campusId.optional() }))
       .mutation(({ ctx, input }) => beginVerification(ctx.db, input.email, ctx.requester, undefined, input.campusId)),

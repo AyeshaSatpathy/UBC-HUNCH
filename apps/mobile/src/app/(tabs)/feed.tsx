@@ -1,4 +1,5 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { isOpen, useAccount, useCampus, useSession } from '../../api';
@@ -24,6 +25,8 @@ export default function Feed() {
   });
   const markets = feed.data?.pages.flatMap(page => page.items) ?? [];
   const featured = markets.find(isOpen);
+  const activity = useQuery({ queryKey: ['activity', campusId],
+    queryFn: ({ signal }) => api.activity.query({ campusId }, { signal }), refetchInterval: 5_000 });
   return <Page tabbed>
     <Wordmark />
     <View style={s.row}>
@@ -41,5 +44,13 @@ export default function Feed() {
       retry={() => { void account.refetch(); if (selected === 'all' || campusId) void feed.refetch(); }}>Couldn’t load the feed.</ErrorNotice>
       : feed.isPending ? <Loading>Loading markets…</Loading> : !markets.length && <Note>No markets here yet.</Note>}
     {feed.hasNextPage && <Button label={feed.isFetchingNextPage ? 'Loading more…' : 'Load more'} tone="quiet" disabled={feed.isFetchingNextPage} onPress={() => void feed.fetchNextPage()} />}
+    <Text style={s.label}>Live activity</Text>
+    {activity.isPending ? <Loading>Loading activity…</Loading> :
+      activity.isError ? <ErrorNotice retry={() => void activity.refetch()}>Couldn’t load activity.</ErrorNotice> :
+      !activity.data.length ? <Note>No activity yet.</Note> :
+      activity.data.map(item => <View key={item.id} style={s.panel}>
+        <Text style={s.muted}>{{ MarketCreated: 'New market', Purchased: 'New purchase', Finalized: 'Market settled', MarketFunded: 'Trading opened' }[item.kind]}</Text>
+        <Button tone="quiet" label={item.question} onPress={() => router.push({ pathname: '/market/[id]', params: { id: item.marketId } })} />
+      </View>)}
   </Page>;
 }

@@ -22,6 +22,7 @@
     "arc:student-operations": "bun src/arc/run-student-operations.ts",
     "arc:auto-fund": "bun src/arc/run-auto-funding.ts",
     "arc:reviewer": "bun src/arc/set-reviewer.ts",
+    "stream:configure": "bun src/configure-stream.ts",
     "arc:provision-treasury": "bun src/arc/provision-treasury.ts"
   },
   "dependencies": {

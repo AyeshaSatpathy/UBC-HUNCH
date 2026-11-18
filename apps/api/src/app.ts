@@ -5,9 +5,11 @@ import { sql } from "drizzle-orm";
 import { appRouter } from "./router";
 import type { Database } from "./db";
 import { reviewerRoutes } from "./reviewer";
+import { streamRoutes } from "./streams";
 export function createApp(db: Database, origins: string[], requestIp?: (request: Request) => string | undefined) {
   const app = new Hono();
   app.route("/reviewer", reviewerRoutes(db, requestIp));
+  app.route("/webhooks/quicknode", streamRoutes(db));
   app.use("/trpc/*", cors({ origin: origins }));
   app.get("/health", (c) => c.json({ status: "ok" }));
   app.get("/ready", async (c) => {
