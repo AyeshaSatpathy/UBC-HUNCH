@@ -19,7 +19,7 @@ export function GeminiSearch({ onSelect }: { onSelect: (item: GeminiChoice) => v
       style={s.input} value={input} onChangeText={setInput} maxLength={120} />
     <Button label="Search Gemini" disabled={input.trim().length < 2 || result.isFetching}
       tone="quiet" onPress={() => { setQuery(input.trim()); if (query === input.trim()) void result.refetch(); }} />
-    {query && (result.isPending ? <Loading>Searching Gemini…</Loading> :
+    {!!query && (result.isPending ? <Loading>Searching Gemini…</Loading> :
       result.isError ? <ErrorNotice retry={() => void result.refetch()}>Gemini search is unavailable.</ErrorNotice> :
       !result.data.length ? <Note>No matching active contracts.</Note> :
       result.data.map(item => <Button key={item.contractId} label={item.question} tone="quiet" onPress={() => onSelect(item)} />))}

@@ -42,7 +42,7 @@ export default function Onboarding() {
         placeholderTextColor={c.muted} style={s.input} />
       <Button label={request.isPending ? 'Sending…' : 'Send code'} disabled={request.isPending || !/^[^\s@]+@[^\s@]+\.edu$/i.test(email.trim())} onPress={() => request.mutate()} />
     </>}
-    {challengeId && <>
+    {!!challengeId && <>
       <Text style={s.muted}>Verification code</Text>
       <TextInput accessibilityLabel="Verification code" value={code} placeholder="000000"
         onChangeText={(value) => setCode(value.replace(/\D/g, ''))} maxLength={6} keyboardType="number-pad"
