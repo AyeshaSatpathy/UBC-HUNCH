@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { type Action, type Position, isSettled, money, shares, statusLabel, useAction, usePortfolio, useSession } from '../../api';
-import { Button, Note, Page, c, s } from '../../ui';
+import { type Action, type Position, isSettled, money, shares, statusLabel, studentError, useAction, usePortfolio, useSession } from '../../api';
+import { Button, ErrorNotice, Loading, Note, Page, s } from '../../ui';
 
 function PendingAction({ item }: { item: Action }) {
   const action = useAction(item.id);
@@ -54,7 +54,9 @@ function Claim({ position }: { position: Position }) {
       <Button label={refund ? 'Collect refund' : 'Collect payout'} disabled={submit.isPending}
         onPress={() => submit.mutate()} />
     </>}
-    {(submit.error || status.data?.status === 'failed') && <Text style={s.error}>{submit.error?.message ?? 'Collection didn’t go through. Try again.'}</Text>}
+    {preview.isPending && !pending && <Text style={s.muted}>Checking what you can collect…</Text>}
+    {preview.data?.status === 'unavailable' && <Text style={s.muted}>Nothing to collect for this market.</Text>}
+    {(submit.error || status.data?.status === 'failed') && <Text accessibilityRole="alert" style={s.error}>{studentError(submit.error, 'Collection didn’t go through. Try again.')}</Text>}
     {preview.isError && <Button label="Check payout" tone="quiet" onPress={() => void preview.refetch()} />}
     {status.isError && <Button label="Check collection status" tone="quiet" onPress={() => void status.refetch()} />}
   </>;
@@ -65,22 +67,22 @@ export default function Portfolio() {
   const data = usePortfolio();
   const pending = useQuery({ queryKey: ['pending-actions'], queryFn: ({ signal }) => api.actions.pending.query(undefined, { signal }) });
   const positions = data.data?.positions.filter(item => item.paidCents !== '0' || item.yesSharesMillionths !== '0' || item.noSharesMillionths !== '0') ?? [];
-  return <Page>
+  return <Page tabbed>
     <Text accessibilityRole="header" style={s.heading}>Portfolio</Text>
     <View style={s.panel}>
       <Text style={s.muted}>Available balance</Text>
-      <Text style={[s.heading, { color: c.lime, fontSize: 50 }]} accessibilityLiveRegion="polite">
-        {data.data?.balanceCents != null ? money(data.data.balanceCents) : '—'}
-      </Text>
+      {data.data?.balanceCents != null && <Text style={s.value} accessibilityLiveRegion="polite">{money(data.data.balanceCents)}</Text>}
       {data.data?.state === 'pending' && <Text style={s.muted}>Your account is being set up.</Text>}
-      {data.isError && <Button label="Retry balance" tone="quiet" onPress={() => void data.refetch()} />}
     </View>
+    {data.isPending && <Loading>Loading your portfolio…</Loading>}
+    {data.isError && <ErrorNotice retry={() => void data.refetch()}>Couldn’t load your portfolio.</ErrorNotice>}
+    {pending.isError && <ErrorNotice retry={() => void pending.refetch()}>Couldn’t check pending activity.</ErrorNotice>}
     {pending.data?.map(item => <PendingAction key={item.id} item={item} />)}
     {([['Open positions', false], ['Settled activity', true]] as const).map(([label, settled]) => {
       const entries = positions.filter(({ market }) => isSettled(market) === settled);
       return <View key={label} style={{ gap: 12 }}>
         <Text style={s.label}>{label}</Text>
-        {!entries.length && !data.isPending && <Note>{settled ? 'No settled activity yet.' : 'Your open positions will appear here.'}</Note>}
+        {!entries.length && data.isSuccess && <Note>{settled ? 'No settled activity yet.' : 'Your open positions will appear here.'}</Note>}
         {entries.map(position => <View key={position.market.id} style={s.panel}>
           <Text style={s.label}>{position.market.question}</Text>
           <Text style={s.muted}>{statusLabel(position.market)}</Text>

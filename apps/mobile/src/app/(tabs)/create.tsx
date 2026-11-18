@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
-import { actionKey, dateLabel, useAccount, useAction, useCampus, useSession } from '../../api';
-import { Button, Page, c, s } from '../../ui';
+import { actionKey, dateLabel, studentError, useAccount, useAction, useCampus, useSession } from '../../api';
+import { Button, ErrorNotice, Loading, Note, Page, c, s } from '../../ui';
 
 const fields = [
   ['question', 'Question', 'Will the campus café extend its hours?'],
@@ -66,21 +66,25 @@ export default function Create() {
     if (operation.data?.status === 'failed') { key.current = { value: '', form: '' }; setRequest(undefined); }
     create.mutate();
   };
-  return <Page>
+  return <Page tabbed>
     {campus.data && <Text style={s.muted}>{campus.data.name}</Text>}
     <Text accessibilityRole="header" style={s.heading}>{review ? 'Review market' : 'Create a market'}</Text>
     <Text style={s.body}>{review ? 'An approved reviewer must be assigned and the market funded before trading opens.' : 'Ask a campus question with a clear YES or NO outcome.'}</Text>
-    {fields.map(([key, label, placeholder]) => <View key={key} style={{ gap: 7 }}>
+    {account.isPending && <Loading>Checking your account…</Loading>}
+    {account.isError && <ErrorNotice retry={() => void account.refetch()}>Couldn’t load your account.</ErrorNotice>}
+    {account.data?.state === 'pending' && <Note>You can draft a market while your account is being set up.</Note>}
+    {fields.map(([key, label, placeholder]) => <View key={key} style={s.field}>
       <Text style={s.label}>{label}</Text>
       {review ? <Text style={s.body}>{key.endsWith('At') ? dateLabel(String(parseDate(form[key]) / 1000)) : form[key]}</Text>
         : <TextInput accessibilityLabel={label} value={form[key]} maxLength={500} onChangeText={value => setForm(previous => ({ ...previous, [key]: value }))} placeholder={placeholder} placeholderTextColor={c.muted} style={s.input} />}
     </View>)}
-    {(error || create.error || operation.data?.status === 'failed') && <Text style={s.error} accessibilityRole="alert">
-      {error || create.error?.message || 'Publishing didn’t go through. Try again.'}
-    </Text>}
-    {pending && <Text style={s.muted}>Publishing your market…</Text>}
+    {(error || create.error || operation.data?.status === 'failed') && <ErrorNotice>
+      {error || studentError(create.error, 'Publishing didn’t go through. Try again.')}
+    </ErrorNotice>}
+    {operation.isError ? <ErrorNotice label="Check status" retry={() => void operation.refetch()}>Couldn’t check publishing status.</ErrorNotice>
+      : pending && <Loading>Publishing your market…</Loading>}
     {resultId ? <>
-      <Text selectable style={s.body}>Market #{resultId} published · Awaiting funding</Text>
+      <View style={s.panel}><Text selectable style={s.body}>Market #{resultId} published · Awaiting funding</Text></View>
       <Button label="Open market" onPress={() => {
         router.push({ pathname: '/market/[id]', params: { id: resultId } });
         setRequest(undefined);
@@ -88,7 +92,8 @@ export default function Create() {
         setForm({ question: '', source: '', yesRule: '', noRule: '', closesAt: localDate(2), evidenceAt: localDate(4) });
       }} />
     </> : <>
-      <Button label={review ? 'Publish market' : 'Review market'} disabled={create.isPending || pending || (review && account.data?.state !== 'ready')} onPress={submit} />
+      <Button label={pending || create.isPending ? 'Publishing…' : review ? 'Publish market' : 'Review market'}
+        disabled={create.isPending || pending || (review && account.data?.state !== 'ready')} onPress={submit} />
       {review && !pending && <Button label="Edit details" tone="quiet" onPress={() => setReview(false)} />}
     </>}
   </Page>;

@@ -12,14 +12,15 @@ export function BuyButtons({ market }: { market: Market }) {
 
 export function MarketCard({ market, featured = false, canBuy = false }: { market: Market; featured?: boolean; canBuy?: boolean }) {
   return <View style={s.panel}>
-    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/market/[id]', params: { id: market.id } })} style={{ gap: 10 }}>
+    <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/market/[id]', params: { id: market.id } })}
+      style={({ pressed }) => ({ minHeight: 44, gap: 12, opacity: pressed ? 0.78 : 1 })}>
       <View style={s.row}>
         <Icon name="location" color={c.lime} size={16} />
         <Text style={s.muted}>{market.campus.name}</Text>
       </View>
       <View style={[s.row, s.between]}>
-        <Text style={[featured ? s.heading : s.label, { flex: 1, fontSize: featured ? 33 : 19 }]}>{market.question}</Text>
-        {featured ? <Sticker size={118} /> : <Icon name="chevron-forward" color={c.muted} />}
+        <Text style={[featured ? s.heading : s.label, { flex: 1 }]}>{market.question}</Text>
+        {featured ? <Sticker size={86} /> : <Icon name="chevron-forward" color={c.muted} />}
       </View>
       {featured && market.status === 'open' && <>
         <Text style={[s.heading, { fontSize: 42, color: c.lime }]}>{market.yesPercent}% <Text style={{ color: c.cream, fontSize: 26 }}>YES</Text></Text>

@@ -43,6 +43,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
     setToken(next);
   }, [queryClient]);
+  useEffect(() => queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== 'updated') return;
+    const error = event.query.state.error;
+    if (error instanceof TRPCClientError && error.data?.code === 'UNAUTHORIZED') void setSession(null);
+  }), [queryClient, setSession]);
   return <Context.Provider value={{
     api, loading: token === undefined, signedIn: !!token, setSession,
   }}>{children}</Context.Provider>;
@@ -93,6 +98,21 @@ export function useAction(id?: string | null) {
 }
 
 export const actionKey = () => Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+export function studentError(error: unknown, fallback: string) {
+  if (!(error instanceof TRPCClientError)) return fallback;
+  if (error.data?.code === 'TOO_MANY_REQUESTS') return 'Please wait before requesting another code.';
+  if (error.data?.code === 'UNAUTHORIZED') return 'Please sign in again.';
+  const messages: Record<string, string> = {
+    'This school email domain is not supported': 'This school email domain is not supported.',
+    'This email does not match the selected campus.': 'This email does not match the selected campus.',
+    'The code is invalid or expired': 'The code is invalid or expired.',
+    'The price changed. Review the new quote before confirming.': 'The price changed. Review the new quote before confirming.',
+    'Insufficient balance.': 'Insufficient balance.',
+    'You already have an action processing. Check Portfolio to resume.': 'You already have an action processing. Check Portfolio to resume.',
+    'You already made a prediction.': 'You already made a prediction.',
+  };
+  return Object.hasOwn(messages, error.message) ? messages[error.message] : fallback;
+}
 export const isOpen = (market: Market) => market.status === 'open' && Number(market.closesAtUnix) * 1_000 > Date.now();
 export const isSettled = (market: Market) => market.status === 'yes' || market.status === 'no' || market.status === 'void';
 export const statusLabel = (market: Market) => ({ draft: 'Awaiting funding', open: 'Open', awaiting: 'Awaiting result', yes: 'YES won', no: 'NO won', void: 'Voided' })[market.status];

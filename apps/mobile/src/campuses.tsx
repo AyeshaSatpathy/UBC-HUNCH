@@ -48,7 +48,7 @@ export function CampusSearch({ onSelect }: { onSelect: (campus: Campus) => void 
           key={unitid}
           accessibilityRole="button"
           onPress={() => { onSelect({ unitid, name }); setInput(''); }}
-          style={({ pressed }) => [s.panel, { opacity: pressed ? 0.7 : 1, gap: 4 }]}
+          style={({ pressed }) => [s.panel, { backgroundColor: pressed ? c.border : c.bg, minHeight: 48, gap: 4 }]}
         >
           <Text style={s.body}>{name}</Text>
           <Text style={s.muted}>{city}, {state}</Text>

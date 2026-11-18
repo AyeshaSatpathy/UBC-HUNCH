@@ -43,7 +43,9 @@ export async function beginVerification(db: Database, email: string, requester: 
         (perEmail.latest && now.getTime() - new Date(perEmail.latest).getTime() < 60_000)) {
       throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Please wait before requesting another code" });
     }
-    const [campus] = await tx.select().from(campusEmailDomains).where(eq(campusEmailDomains.domain, domain));
+    const [existing] = await tx.select({ unitid: accounts.unitid }).from(accounts).where(eq(accounts.email, email));
+    const [mapped] = await tx.select().from(campusEmailDomains).where(eq(campusEmailDomains.domain, domain));
+    const campus = existing ?? mapped;
     if (!campus) throw new TRPCError({ code: "BAD_REQUEST", message: "This school email domain is not supported" });
     if (campusId !== undefined && campus.unitid !== campusId) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "This email does not match the selected campus." });
@@ -74,8 +76,10 @@ export async function finishVerification(db: Database, id: string, code: string)
       await tx.update(emailChallenges).set({ attempts: challenge.attempts + 1 }).where(eq(emailChallenges.id, id));
       return;
     }
-    const [campus] = await tx.select().from(campusEmailDomains)
+    const [existing] = await tx.select().from(accounts).where(eq(accounts.email, challenge.email));
+    const [mapped] = await tx.select().from(campusEmailDomains)
       .where(eq(campusEmailDomains.domain, challenge.email.split("@").at(-1)!));
+    const campus = existing ?? mapped;
     if (campus?.unitid !== challenge.unitid) return;
     await tx.update(emailChallenges).set({ consumedAt: now }).where(eq(emailChallenges.id, id));
     await tx.insert(accounts).values({
