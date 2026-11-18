@@ -314,7 +314,7 @@ Run `bun run typecheck`, `bun run test`, and `bun run --cwd apps/mobile lint`. A
 - Gemini's real settled response was fetched and accepted by the adapter. Pure settlement tests reject changed IDs, tickers, rules, pending and invalid statuses, and absent explicit outcomes.
 - Stream receiver tests verify HMAC rejection and duplicate delivery handling. The hosted Arc Logs filter returned the historical vault-deposit event correctly. Real signed QuickNode deliveries reached the Postgres inbox, and public requests with missing or incorrect signatures returned HTTP 401.
 - The historical RPC backfill and live Stream handoff completed. Correctly signed wrong-network payloads returned HTTP 400. A newly submitted market event flowing through the Stream into student activity remains a manual check.
-- Prior live verification established school email delivery, wallet creation, UT Austin UNITID registration, the $10 credit, and restart recovery. Prior seed settlement and claim receipts are recorded in [the contract report](packages/contracts/STAGE_1_REPORT.md).
+- Prior live verification established school email delivery, wallet creation, UT Austin UNITID registration, the $10 credit, and restart recovery. Prior seed settlement and claim behavior were verified on testnet.
 - Automatic funding with the LP signer, reviewer-console resolution of a newly Gemini-linked market, sustained Gemini history collection, and this build on a physical iPhone remain manual verification steps.
 
 ## Manual checklist
@@ -372,11 +372,6 @@ Private `.env` files, local tools, keystores, build outputs, Foundry caches and 
 
 Preserve PostgreSQL data across restarts. Sessions, provisioning progress, operation identities, the event cursor and the automatic funding limit depend on that state.
 
-## Project references
+## Contract documentation
 
-- [Original build specification](CAMPUS_MARKETS_SPEC.md)
-- [Staged project plan](CAMPUS_MARKETS_PLAN.md)
-- [Contract setup and deployment](packages/contracts/README.md)
-- [Stage 1 verification report](packages/contracts/STAGE_1_REPORT.md)
-
-The original specification records the initial scope. The implementation and this README reflect subsequent decisions, including school email login, backend-managed signing, dollars in the student UI, a separate reviewer console, and removal of voice features.
+See [contract setup and deployment](packages/contracts/README.md) for deployment settings, accounting rules, reviewer assignment and manual market funding.
