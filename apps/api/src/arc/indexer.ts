@@ -18,11 +18,13 @@ const cursorKey = and(eq(arcCursors.chainId, chainId), eq(arcCursors.contract, m
 async function readLogsWithBackoff(rpc: ReturnType<typeof createArcClient>, fromBlock: bigint, toBlock: bigint) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await readLogs(rpc, fromBlock, toBlock);
+      const logs = await readLogs(rpc, fromBlock, toBlock);
+      await Bun.sleep(1_000);
+      return logs;
     } catch (error) {
       const rpcError = error as { code?: number; details?: string };
-      if (rpcError.code !== -32005 || !rpcError.details?.includes("rate limit") || attempt >= 6) throw error;
-      await Bun.sleep(1_000 * (attempt + 1));
+      if (rpcError.code !== -32005 || !rpcError.details?.includes("rate limit") || attempt >= 8) throw error;
+      await Bun.sleep(Math.min(30_000, 2_000 * 2 ** attempt));
     }
   }
 }

@@ -110,9 +110,9 @@ Money is represented as six-decimal integers in contract operations and integer-
 | Network | Arc Testnet, API slug `arc-testnet`, chain `5042002` |
 | Dataset | `logs`, sufficient for the CampusMarkets events |
 | Contract | `0x73dd30b231f405c1dcf0812c64ddcc5f02143d20` |
-| Start block | `72337332`, includes the full deployed contract history |
+| Historical start block | `72337332`, full history is backfilled through RPC before handing off at the stored cursor |
 | End block | Unset, so delivery continues |
-| Batch | 100 blocks, elastic batching enabled |
+| Batch | One block, elastic batching enabled. The Arc Logs service rejects larger batches |
 | Region | `usa_east` |
 | Filter | [quicknode-filter.js](apps/api/quicknode-filter.js), flattens Logs and keeps only the contract address |
 | Destination | Webhook, HTTPS, compression `none`, HMAC security token |
@@ -143,7 +143,9 @@ $tunnel.public_url.TrimEnd('/') + '/webhooks/quicknode'
 
 Populate `QUICKNODE_WEBHOOK_URL` with that result and add `QUICKNODE_API_KEY` and `QUICKNODE_STREAM_SECURITY_TOKEN` locally. Run `bun run --cwd apps/api stream:configure`. It creates a paused Stream with a stable external ID, so a retry reuses the same Stream. Inspect it in the QuickNode dashboard, run **Check Connection**, test the filter, and activate it. The configured security token must match the receiver's environment. Restart the API after changing its environment. Run the primary consumer with `bun run arc:index --streams --follow`.
 
-As of this build, QuickNode credentials and a public destination were absent. No hosted Stream was created or activated. Automatic approval review rejected starting ngrok because publishing the local API required explicit approval. This repository contains the configuration and receiver, and the public destination remains a deployment step.
+The configured Stream ID is `a2b23407-041b-4af8-82c7-89a0c5a7a356`. The user runs the ngrok tunnel. When its hostname changes, pause this existing Stream, update `QUICKNODE_WEBHOOK_URL` locally and the Stream's destination URL in QuickNode, restart the API, check the connection, and resume delivery. Repeated `stream:configure` calls return the existing Stream unchanged, so they do not update its URL.
+
+On November 18, 2026, the historical RPC backfill completed through block `72903867`. The active Stream was handed off at `72903868`. Signed live deliveries reached block `72903939`, and the Stream consumer advanced the database cursor beyond the handoff to `72903900`. Public Arc RPC backfill requests are paced and retry rate limits with increasing delays. Keep the API, tunnel, and Stream consumer running for ongoing delivery.
 
 Arc Testnet and Logs support, the filter schema, delivery metadata, signature calculation, and Stream creation settings were checked in the current official documentation. [Supported networks](https://www.quicknode.com/docs/streams/supported-chains), [Logs format](https://www.quicknode.com/docs/streams/data-sources/ethereum-evm), [Delivery signatures](https://www.quicknode.com/guides/quicknode-products/streams/validating-incoming-streams-webhook-messages), [Stream creation](https://www.quicknode.com/docs/streams/rest-api/create-stream)
 
@@ -203,7 +205,8 @@ Run `bun run typecheck`, `bun run test`, and `bun run --cwd apps/mobile lint`. A
 - Verified locally in this build, eight API tests, 75 assertions, both workspace typechecks, Expo lint, and the production web export.
 - Browser walkthrough used isolated responses for email login, session restore, logout, purchase response recovery, claim collection, publishing, and Gemini linking with locked terms. It submitted no live purchase.
 - Gemini's real settled response was fetched and accepted by the adapter. Pure settlement tests reject changed IDs, tickers, rules, pending and invalid statuses, and absent explicit outcomes.
-- Stream receiver tests verify HMAC rejection and duplicate delivery handling. Hosted QuickNode delivery, network/filter deployment, and live Stream-backed activity remain unverified until configuration is completed.
+- Stream receiver tests verify HMAC rejection and duplicate delivery handling. The hosted Arc Logs filter returned the historical vault-deposit event correctly. Real signed QuickNode deliveries reached the Postgres inbox, and public requests with missing or incorrect signatures returned HTTP 401.
+- The historical RPC backfill and live Stream handoff completed. Correctly signed wrong-network payloads returned HTTP 400. A newly submitted market event flowing through the Stream into student activity remains a manual check.
 - Prior live verification established school email delivery, wallet creation, UT Austin UNITID registration, the $10 credit, and restart recovery. Prior seed settlement and claim receipts are recorded in [the contract report](packages/contracts/STAGE_1_REPORT.md).
 - Automatic funding with the LP signer, reviewer-console resolution of a newly Gemini-linked market, sustained Gemini history collection, and this build on a physical iPhone remain manual verification steps.
 

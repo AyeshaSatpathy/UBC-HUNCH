@@ -9,7 +9,7 @@ const response = await fetch("https://api.quicknode.com/streams/rest/v1/streams"
   method: "POST", headers: { "x-api-key": key, "content-type": "application/json" },
   body: JSON.stringify({
     name: "Hunch CampusMarkets Arc", external_id: "hunch-campusmarkets-5042002-v1",
-    network: "arc-testnet", dataset: "logs", region: "usa_east", dataset_batch_size: 100,
+    network: "arc-testnet", dataset: "logs", region: "usa_east", dataset_batch_size: 1,
     elastic_batch_enabled: true,
     destination: "webhook",
     destination_attributes: {
