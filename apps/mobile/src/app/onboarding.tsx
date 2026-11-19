@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { studentError, useSession } from '../api';
-import { GoogleSignIn } from '../google-sign-in';
 import { Button, ErrorNotice, Icon, Loading, Page, Sticker, c, s } from '../ui';
 
 export default function Onboarding() {
@@ -64,7 +63,7 @@ export default function Onboarding() {
     <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <Text accessibilityLabel="Hunch" style={styles.wordmark}>hunch<Text style={{ color: c.lime }}>.</Text></Text>
-        {!challenge && <Sticker size={108} />}
+        {!challenge && <Sticker size={124} />}
         <View style={styles.intro}>
           <Text accessibilityRole="header" style={styles.heading}>{challenge ? 'One quick check' : mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Create an account' : 'Reset password'}</Text>
           <Text style={styles.subtitle}>{challenge ? 'Enter the six-digit code sent to ' + email.trim() + '.' : mode === 'login' ? 'Sign in to your Hunch account.' : mode === 'signup' ? 'Join with your school email.' : 'Verify your school email.'}</Text>
@@ -85,10 +84,6 @@ export default function Onboarding() {
             <Text style={styles.forgotText}>Forgot password?</Text>
           </Pressable>}
           <Button label={request.isPending ? 'Sending code…' : login.isPending ? 'Logging in…' : mode === 'login' ? 'Log in' : 'Send verification code'} disabled={busy} onPress={submit} />
-          {mode !== 'recover' && <>
-            <View style={styles.divider}><View style={styles.rule} /><Text style={s.muted}>or</Text><View style={styles.rule} /></View>
-            <GoogleSignIn key={mode} intent={mode} disabled={busy} />
-          </>}
         </> : <>
           <TextInput accessibilityLabel="Verification code" placeholder="000000" placeholderTextColor={c.muted} value={code}
             onChangeText={value => setCode(value.replace(/\D/g, ''))} maxLength={6} keyboardType="number-pad" autoComplete="one-time-code"
@@ -143,8 +138,6 @@ const styles = StyleSheet.create({
   input: { flex: 1, minWidth: 0, minHeight: 48, color: c.cream, fontSize: 16, paddingVertical: 0 },
   forgot: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', marginTop: -5 },
   forgotText: { ...s.body, fontSize: 14, textDecorationLine: 'underline' },
-  divider: { ...s.row, gap: 14, marginVertical: 6, marginHorizontal: 10 },
-  rule: { flex: 1, height: 1, backgroundColor: c.border },
   footer: { ...s.row, justifyContent: 'center', flexWrap: 'wrap', marginTop: -9 },
   footerLink: { minHeight: 44, justifyContent: 'center' },
   link: { ...s.body, color: c.lilac, fontWeight: '700', textDecorationLine: 'underline' },
