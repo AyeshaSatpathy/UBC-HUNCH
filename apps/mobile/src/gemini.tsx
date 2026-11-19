@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSession } from './api';
-import { Button, ErrorNotice, Loading, Note, c, s } from './ui';
+import { Button, ErrorNotice, Icon, Loading, Note, c, s } from './ui';
 
 export type GeminiChoice = Awaited<ReturnType<ReturnType<typeof useSession>['api']['gemini']['search']['query']>>[number];
 
@@ -13,16 +13,23 @@ export function GeminiSearch({ onSelect }: { onSelect: (item: GeminiChoice) => v
   const result = useQuery({ queryKey: ['gemini-search', query], enabled: query.length >= 2,
     queryFn: ({ signal }) => api.gemini.search.query({ query }, { signal }), retry: false });
   return <View style={s.panel}>
-    <Text style={s.label}>Link a Gemini market</Text>
-    <Text style={s.muted}>Optional. Choose an event to use Gemini’s published question and rules.</Text>
+    <View style={[s.row, s.between]}><Text style={s.label}>Find an event</Text><Text style={s.eyebrow}>GEMINI</Text></View>
+    <Text style={s.muted}>Use a published question and its rules, or write your own below.</Text>
+    <View style={s.row}>
     <TextInput accessibilityLabel="Search Gemini markets" placeholder="Search events" placeholderTextColor={c.muted}
-      style={s.input} value={input} onChangeText={setInput} maxLength={120} />
-    <Button label="Search Gemini" disabled={input.trim().length < 2 || result.isFetching}
+      style={[s.input, { flex: 1, minWidth: 0 }]} value={input} onChangeText={setInput} maxLength={120} returnKeyType="search" onSubmitEditing={() => { if (input.trim().length >= 2) setQuery(input.trim()); }} />
+    <Button label="Search" disabled={input.trim().length < 2 || result.isFetching}
       tone="quiet" onPress={() => { setQuery(input.trim()); if (query === input.trim()) void result.refetch(); }} />
+    </View>
     {!!query && (result.isPending ? <Loading>Searching Geminiâ€¦</Loading> :
       result.isError ? <ErrorNotice retry={() => void result.refetch()}>Gemini search is unavailable.</ErrorNotice> :
       !result.data.length ? <Note>No matching active contracts.</Note> :
-      result.data.map(item => <Button key={item.contractId} label={item.question} tone="quiet" onPress={() => onSelect(item)} />))}
+      <ScrollView nestedScrollEnabled style={{ maxHeight: 260 }} keyboardShouldPersistTaps="handled">
+        {result.data.map(item => <Pressable key={item.contractId} accessibilityRole="button" accessibilityLabel={item.question}
+          onPress={() => onSelect(item)} style={({ pressed }) => [s.row, { minHeight: 56, paddingVertical: 12, borderBottomWidth: 1, borderColor: c.border, opacity: pressed ? 0.7 : 1 }]}>
+          <Text style={[s.body, { flex: 1 }]}>{item.question}</Text><Icon name="add-circle-outline" color={c.lime} />
+        </Pressable>)}
+      </ScrollView>)}
   </View>;
 }
 

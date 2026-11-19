@@ -1,15 +1,16 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
-import { isOpen, useAccount, useCampus, useSession } from '../../api';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { isOpen, useAccount, useCampus, usePortfolio, useSession } from '../../api';
 import { CampusSearch, type Campus } from '../../campuses';
 import { MarketCard } from '../../markets';
-import { Button, ErrorNotice, Loading, Note, Page, Wordmark, s } from '../../ui';
+import { Button, ErrorNotice, Icon, Loading, Note, Page, Wordmark, c, s } from '../../ui';
 
 export default function Feed() {
   const { api } = useSession();
   const account = useAccount();
+  const portfolio = usePortfolio();
   const campus = useCampus(account.data?.campusId);
   const [selected, select] = useState<Campus | 'all' | null>(null);
   const [browsing, setBrowsing] = useState(false);
@@ -28,7 +29,14 @@ export default function Feed() {
   const activity = useQuery({ queryKey: ['activity', campusId],
     queryFn: ({ signal }) => api.activity.query({ campusId }, { signal }), refetchInterval: 5_000 });
   return <Page tabbed>
-    <Wordmark />
+    <View style={[s.row, s.between]}><Wordmark /><Pressable accessibilityRole="button" accessibilityLabel="Open your profile" onPress={() => router.navigate('/profile')}
+      style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.lilac, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={[s.label, { color: c.bg }]}>{account.data?.displayName?.slice(0, 1).toUpperCase() || 'H'}</Text>
+    </Pressable></View>
+    <View style={{ gap: 4 }}><Text style={s.eyebrow}>YOUR DAILY CAMPUS FIX</Text>
+      <Text style={s.heading}>{account.data?.displayName ? 'Hey, ' + account.data.displayName + '.' : 'Right here. On campus.'}</Text>
+      <Text style={s.muted}>See what everyone is calling. Make a few calls of your own.</Text>
+    </View>
     <View style={s.row}>
       <Button label="All" grow selected={filter === 'all'} tone={filter === 'all' ? 'lime' : 'quiet'} onPress={() => select('all')} />
       <Button label="My campus" grow selected={selected === null} tone={selected === null ? 'lime' : 'quiet'} onPress={() => select(null)} />
@@ -38,8 +46,18 @@ export default function Feed() {
     {filter && filter !== 'all' && <Text style={s.muted}>{filter.name}</Text>}
     {account.data?.state === 'pending' && <Note>Your account is being set up. You can browse markets while you wait.</Note>}
     {featured && <MarketCard featured market={featured} canBuy={account.data?.state === 'ready' && featured.campus.unitid === account.data.campusId} />}
-    {markets.length > (featured ? 1 : 0) && <Text style={s.label}>More markets</Text>}
-    {markets.filter(item => item !== featured).map(market => <MarketCard key={market.id} market={market} />)}
+    {markets.length > (featured ? 1 : 0) && <>
+      <Text style={s.label}>Around campus</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+        {markets.filter(item => item !== featured).map(market => <View key={market.id} style={{ width: 270 }}><MarketCard market={market} /></View>)}
+      </ScrollView>
+    </>}
+    {!!portfolio.data?.positions.length && <>
+      <View style={[s.row, s.between]}><Text style={s.label}>Your picks</Text><Button label="View all" tone="quiet" onPress={() => router.navigate('/portfolio')} /></View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+        {portfolio.data.positions.slice(0, 8).map(position => <View key={position.market.id} style={{ width: 270 }}><MarketCard market={position.market} /></View>)}
+      </ScrollView>
+    </>}
     {(feed.isError || account.isError) ? <ErrorNotice label="Retry feed"
       retry={() => { void account.refetch(); if (selected === 'all' || campusId) void feed.refetch(); }}>Couldn’t load the feed.</ErrorNotice>
       : feed.isPending ? <Loading>Loading markets…</Loading> : !markets.length && <Note>No markets here yet.</Note>}
@@ -47,10 +65,10 @@ export default function Feed() {
     <Text style={s.label}>Live activity</Text>
     {activity.isPending ? <Loading>Loading activity…</Loading> :
       activity.isError ? <ErrorNotice retry={() => void activity.refetch()}>Couldn’t load activity.</ErrorNotice> :
-      !activity.data.length ? <Note>No activity yet.</Note> :
-      activity.data.map(item => <View key={item.id} style={s.panel}>
+      !activity.data.length ? <Note>When someone makes a move on campus, you will see it here.</Note> :
+      activity.data.slice(0, 6).map(item => <Pressable key={item.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/market/[id]', params: { id: item.marketId } })} style={{ minHeight: 64, paddingVertical: 10, gap: 4, borderBottomWidth: 1, borderColor: c.border }}>
         <Text style={s.muted}>{{ MarketCreated: 'New market', Purchased: 'New purchase', Finalized: 'Market settled', MarketFunded: 'Trading opened' }[item.kind]}</Text>
-        <Button tone="quiet" label={item.question} onPress={() => router.push({ pathname: '/market/[id]', params: { id: item.marketId } })} />
-      </View>)}
+        <View style={s.row}><Text style={[s.body, { flex: 1 }]}>{item.question}</Text><Icon name="chevron-forward" size={18} color={c.muted} /></View>
+      </Pressable>)}
   </Page>;
 }

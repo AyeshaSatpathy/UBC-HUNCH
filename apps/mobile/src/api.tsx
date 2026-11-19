@@ -27,16 +27,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>();
   const queryClient = useQueryClient();
   useEffect(() => {
-    const read = async () => Platform.OS === 'web'
-      ? globalThis.sessionStorage?.getItem(key) ?? null
-      : SecureStore.getItemAsync(key);
+    const read = async () => {
+      if (Platform.OS !== 'web') return SecureStore.getItemAsync(key);
+      const saved = globalThis.localStorage?.getItem(key) ?? globalThis.sessionStorage?.getItem(key) ?? null;
+      if (saved) globalThis.localStorage?.setItem(key, saved);
+      globalThis.sessionStorage?.removeItem(key);
+      return saved;
+    };
     void read().then(setToken, () => setToken(null));
   }, []);
   const api = useMemo(() => token ? makeApi(token) : publicApi, [token]);
   const setSession = useCallback(async (next: string | null) => {
     if (Platform.OS === 'web') {
-      if (next) globalThis.sessionStorage?.setItem(key, next);
-      else globalThis.sessionStorage?.removeItem(key);
+      if (next) globalThis.localStorage?.setItem(key, next);
+      else globalThis.localStorage?.removeItem(key);
+      globalThis.sessionStorage?.removeItem(key);
     } else if (next) await SecureStore.setItemAsync(key, next);
     else await SecureStore.deleteItemAsync(key);
     await queryClient.cancelQueries();
@@ -105,14 +110,15 @@ export function useAction(id?: string | null) {
 export const actionKey = () => Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 export function studentError(error: unknown, fallback: string) {
   if (!(error instanceof TRPCClientError)) return fallback;
-  if (error.data?.code === 'TOO_MANY_REQUESTS') return 'Please wait before requesting another code.';
+  if (error.data?.code === 'TOO_MANY_REQUESTS') return error.message.startsWith('Too many sign-in') ? 'Too many attempts. Try again in 15 minutes.' : 'Please wait a minute before requesting another code.';
   if (error.data?.code === 'UNAUTHORIZED') return 'Please sign in again.';
   const messages: Record<string, string> = {
+    'Email or password is incorrect. You can also sign in with an email code.': 'Email or password is incorrect. Try again or use an email code.',
     'This school email domain is not supported': 'This school email domain is not supported.',
     'This email does not match the selected campus.': 'This email does not match the selected campus.',
     'The code could not be sent. Please retry later': 'Email is temporarily unavailable. Please try again shortly.',
     'Email verification is unavailable': 'Email sign-in is temporarily unavailable. Please try again shortly.',
-    'Your account is still being set up.': 'We’re getting your account ready. You can keep browsing while you wait.',
+    'Your account is still being set up.': 'We are getting your account ready. You can keep browsing while you wait.',
     'The code is invalid or expired': 'The code is invalid or expired.',
     'The price changed. Review the new quote before confirming.': 'The price changed. Review the new quote before confirming.',
     'Insufficient balance.': 'Insufficient balance.',

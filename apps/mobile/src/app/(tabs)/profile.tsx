@@ -1,12 +1,19 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { Text, View } from 'react-native';
+import { useState } from 'react';
+import { Text, TextInput, View } from 'react-native';
 import { useAccount, useCampus, usePortfolio, useSession } from '../../api';
 import { Button, ErrorNotice, Icon, Loading, Note, Page, c, s } from '../../ui';
 
 export default function Profile() {
   const { api, setSession } = useSession();
   const account = useAccount();
+  const [name, setName] = useState('');
+  const [editing, setEditing] = useState(false);
+  const client = useQueryClient();
+  const saveName = useMutation({ mutationFn: () => api.auth.updateName.mutate({ displayName: name.trim() }),
+    onSuccess: async () => { await client.invalidateQueries({ queryKey: ['account'] }); setEditing(false); },
+  });
   const campus = useCampus(account.data?.campusId);
   const portfolio = usePortfolio();
   const signOut = useMutation({ mutationFn: async () => {
@@ -18,6 +25,17 @@ export default function Profile() {
   const board = useQuery({ queryKey: ['leaderboard'], queryFn: ({ signal }) => api.leaderboard.query({}, { signal }), refetchInterval: 10_000 });
   return <Page tabbed>
     <Text accessibilityRole="header" style={s.heading}>Reputation</Text>
+    <View style={s.panel}>
+      <View style={s.row}><View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: c.lilac, justifyContent: 'center', alignItems: 'center' }}><Text style={[s.label, { color: c.bg }]}>{account.data?.displayName?.slice(0, 1).toUpperCase() || 'H'}</Text></View>
+        <View style={{ flex: 1 }}><Text style={s.label}>{account.data?.displayName || 'Your corner of campus'}</Text><Text style={s.muted}>A little instinct goes a long way.</Text></View>
+      </View>
+      {editing ? <>
+        <TextInput accessibilityLabel="Your name" value={name} onChangeText={setName} maxLength={40} style={s.input} autoComplete="given-name" />
+        <Button label={saveName.isPending ? 'Saving...' : 'Save name'} disabled={saveName.isPending || !name.trim()} onPress={() => saveName.mutate()} />
+        <Button label="Cancel" tone="quiet" disabled={saveName.isPending} onPress={() => setEditing(false)} />
+        {saveName.isError && <ErrorNotice>Could not save your name. Please try again.</ErrorNotice>}
+      </> : <Button label="Edit your name" tone="quiet" onPress={() => { setName(account.data?.displayName || ''); setEditing(true); }} />}
+    </View>
     {campus.data && <View style={[s.panel, s.row]}><Icon name="location" color={c.lime} /><Text style={s.body}>{campus.data.name}</Text></View>}
     <View style={s.panel}>
       <Text style={s.label}>Prediction accuracy</Text>

@@ -200,7 +200,13 @@ The project's SDK version must match the installed client. Expo's current iOS in
 
 ## Login and campus directory
 
-The entry screen asks for school email and a six-digit code. The same flow signs up a new student or signs in an existing account. Existing accounts retain their campus and wallet, and their confirmed credit prevents repeat provisioning. The native app stores the bearer session in Expo SecureStore. The web preview uses tab-scoped session storage. Log out is on Profile. Expired authenticated queries clear the local session and return to email entry.
+The entry screen separates **Log in** and **Sign up**. Returning students use their school email and password. New students choose a display name and a password of 12–128 characters, then verify a six-digit school email code before their password is saved. Existing accounts retain their campus, balance and provisioning state.
+
+Accounts created before password login was added can choose **Set or reset password**. Enter the school email and a new password, then verify the email code once. The same flow handles forgotten passwords. A verified password reset revokes prior sessions. Passwords are hashed with Argon2id using 64 MiB of memory and two iterations. Failed and successful password attempts count toward limits of 15 per email and 50 per direct client IP in 15 minutes. Unknown accounts and wrong passwords return the same error.
+
+Sessions last 30 days. The native app keeps its bearer token in Expo SecureStore. The browser preview persists it in local storage across tab and browser restarts and migrates older tab-scoped sessions when reopened. Sign out removes the local token and revokes the current server session. Expired queries and actions return the user to Log in.
+
+Hunch opens with a brief custom logo animation, skipped when reduced motion is enabled. The feed includes a personal greeting, featured market, horizontal campus collections and the student's existing picks. Profile lets students edit their display name. Gemini event search uses compact results with bounded scrolling.
 
 Codes are HMAC-hashed, expire after ten minutes, allow five attempts, and are consumed once. A resend invalidates prior codes. Limits are one request per minute, five per email per hour, 20 per direct client IP per hour, and 280 app messages per rolling day. A reverse proxy shares the direct-IP bucket unless deployment adds a trusted proxy configuration.
 
@@ -311,7 +317,7 @@ The November 19 audit removed the unused public notes-write endpoint, capped API
 
 Run `bun run typecheck`, `bun run test`, and `bun run --cwd apps/mobile lint`. API tests require the migrated and seeded local database. `/health` checks the process, `/ready` checks Postgres, and `GET /webhooks/quicknode` reports whether Stream verification is configured.
 
-- The cleanup verification passed eight API tests with 79 assertions, all 16 Foundry contract tests (including 256 fuzz runs), both workspace typechecks, and Expo lint. The production web export passed during the preceding UI verification.
+- The account redesign verification passed nine API tests with 93 assertions, both workspace typechecks, Expo lint and the production web export. The preceding contract audit passed all 16 Foundry tests, including 256 fuzz runs.
 - Browser walkthrough used isolated responses for email login, session restore, logout, purchase response recovery, claim collection, publishing, and Gemini linking with locked terms. It submitted no live purchase.
 - Gemini's real settled response was fetched and accepted by the adapter. Pure settlement tests reject changed IDs, tickers, rules, pending and invalid statuses, and absent explicit outcomes.
 - Stream receiver tests verify HMAC rejection and duplicate delivery handling. The hosted Arc Logs filter returned the historical vault-deposit event correctly. Real signed QuickNode deliveries reached the Postgres inbox, and public requests with missing or incorrect signatures returned HTTP 401.
@@ -321,7 +327,7 @@ Run `bun run typecheck`, `bun run test`, and `bun run --cwd apps/mobile lint`. A
 
 ## Manual checklist
 
-1. Enter your school email, receive a code, and sign in. Returning users land on Feed with their existing balance. Reopen the app and confirm the session persists. Log out, then confirm email entry returns.
+1. For an existing code-only account, choose **Set or reset password**, enter your school email and a password, and verify the emailed code. For a new account, use **Sign up** and choose a display name. Sign out and use **Log in** with email and password. Reopen the app or browser and confirm the session persists, then check your existing balance and editable profile name.
 2. Search campus feeds. With the Stream active, verify a known market event appears once in Live activity and in campus totals after the consumer catches up.
 3. In Create, search a Gemini event, select a contract, and inspect the pinned question and rules. Set a future trading close at or before its expiry and an evidence deadline after expiry. Publish and note its market number.
 4. Have the admin assign a separate approved reviewer. With auto-funding active, verify the draft becomes Open and that one funding receipt is logged. Check that restarting the worker preserves its four-market limit.
