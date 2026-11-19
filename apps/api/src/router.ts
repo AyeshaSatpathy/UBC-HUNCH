@@ -2,7 +2,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "./db";
-import { campuses, notes, sessions } from "./schema";
+import { campuses, sessions } from "./schema";
 import { beginVerification, finishVerification, getSession, schoolEmail } from "./auth/accounts";
 import { getMarket, listMarkets, portfolio, previewClaim, quoteMarket } from "./arc/market-api";
 import { claimStatus, submitClaim } from "./arc/claims";
@@ -139,20 +139,6 @@ export const appRouter = t.router({
           .limit(limit);
       }),
   }),
-  notes: t.router({
-    list: t.procedure.query(({ ctx }) =>
-      ctx.db
-        .select()
-        .from(notes)
-        .orderBy(desc(notes.createdAt), desc(notes.id))
-        .limit(50),
-    ),
-    create: t.procedure
-      .input(z.object({ text: z.string().trim().min(1).max(500) }))
-      .mutation(async ({ ctx, input }) => {
-        const [note] = await ctx.db.insert(notes).values(input).returning();
-        return note;
-      }),
-  }),
+
 });
 export type AppRouter = typeof appRouter;

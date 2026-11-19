@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { bodyLimit } from "hono/body-limit";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { sql } from "drizzle-orm";
 import { appRouter } from "./router";
@@ -11,6 +12,7 @@ export function createApp(db: Database, origins: string[], requestIp?: (request:
   app.route("/reviewer", reviewerRoutes(db, requestIp));
   app.route("/webhooks/quicknode", streamRoutes(db));
   app.use("/trpc/*", cors({ origin: origins }));
+  app.use("/trpc/*", bodyLimit({ maxSize: 1_000_000 }));
   app.get("/health", (c) => c.json({ status: "ok" }));
   app.get("/ready", async (c) => {
     try {

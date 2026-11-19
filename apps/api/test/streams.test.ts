@@ -17,6 +17,14 @@ test("Stream deliveries authenticate, validate, and deduplicate", async () => {
   const signature = createHmac("sha256", "local-stream-test").update("nonce123" + body).digest("hex");
   try {
     expect((await send("0".repeat(64))).status).toBe(401);
+    for (const invalid of [
+      JSON.stringify({ network: "wrong-network", start: 123, end: 124, logs: [] }),
+      JSON.stringify({ network: "arc-testnet", start: 124, end: 123, logs: [] }),
+      "{invalid-json",
+    ]) {
+      const signed = createHmac("sha256", "local-stream-test").update("nonce123" + invalid).digest("hex");
+      expect((await send(signed, invalid)).status).toBe(400);
+    }
     expect((await send(signature)).status).toBe(200);
     expect((await send(signature)).status).toBe(200);
     const rows = await db.select().from(streamBatches).where(eq(streamBatches.startBlock, 123n));
