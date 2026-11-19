@@ -45,7 +45,7 @@ test("school code verification is single-use, rate limited, and reuses the same 
     await expect(issue()).rejects.toThrow("Please wait");
     const firstToken = await api.auth.verifyCode.mutate({ challengeId: first.challengeId, code });
     token = firstToken.token;
-    expect(await api.auth.me.query()).toEqual({ campusId: 228778, state: "pending" });
+    expect(await api.auth.me.query()).toEqual({ campusId: 228778, displayName: null, state: "pending" });
     expect(await api.portfolio.get.query()).toEqual({ state: "pending", balanceCents: null, positions: [] });
     await expect(api.auth.verifyCode.mutate({ challengeId: first.challengeId, code })).rejects.toThrow("invalid or expired");
 

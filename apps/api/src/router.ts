@@ -2,8 +2,8 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "./db";
-import { campuses, sessions } from "./schema";
-import { beginVerification, finishVerification, getSession, schoolEmail } from "./auth/accounts";
+import { accounts, campuses, sessions } from "./schema";
+import { beginVerification, finishVerification, getSession, passwordLogin, schoolEmail } from "./auth/accounts";
 import { getMarket, listMarkets, portfolio, previewClaim, quoteMarket } from "./arc/market-api";
 import { claimStatus, submitClaim } from "./arc/claims";
 import { advanceStudentOperation, pendingStudentOperations, startStudentOperation } from "./arc/student-operations";
@@ -40,12 +40,22 @@ export const appRouter = t.router({
   leaderboard: t.procedure.input(z.object({ campusId: campusId.optional() }))
     .query(({ ctx, input }) => leaderboard(ctx.db, input.campusId)),
   auth: t.router({
+    updateName: signedIn.input(z.object({ displayName: z.string().trim().min(1).max(40) }))
+      .mutation(async ({ ctx, input }) => {
+        await ctx.db.update(accounts).set(input).where(eq(accounts.id, ctx.session.account.id));
+        return { displayName: input.displayName };
+      }),
     requestCode: t.procedure.input(z.object({ email: schoolEmail, campusId: campusId.optional() }))
       .mutation(({ ctx, input }) => beginVerification(ctx.db, input.email, ctx.requester, undefined, input.campusId)),
-    verifyCode: t.procedure.input(z.object({ challengeId: z.uuid(), code: z.string().regex(/^\d{6}$/) }))
-      .mutation(({ ctx, input }) => finishVerification(ctx.db, input.challengeId, input.code)),
+    login: t.procedure.input(z.object({ email: schoolEmail, password: z.string().min(1).max(128) }))
+      .mutation(({ ctx, input }) => passwordLogin(ctx.db, input.email, input.password, ctx.requester)),
+    verifyCode: t.procedure.input(z.object({ challengeId: z.uuid(), code: z.string().regex(/^\d{6}$/),
+      profile: z.object({ password: z.string().min(12).max(128), displayName: z.string().trim().min(1).max(40).optional() }).optional(),
+    }))
+      .mutation(({ ctx, input }) => finishVerification(ctx.db, input.challengeId, input.code, input.profile)),
     me: signedIn.query(({ ctx }) => ({
       campusId: ctx.session.account.unitid,
+      displayName: ctx.session.account.displayName,
       state: ctx.session.account.fundedAt ? "ready" as const : "pending" as const,
     })),
     signOut: signedIn.mutation(async ({ ctx }) => {

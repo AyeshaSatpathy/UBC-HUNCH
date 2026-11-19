@@ -26,6 +26,8 @@ export const accounts = pgTable("accounts", {
   email: text("email").notNull().unique(),
   unitid: integer("unitid").notNull().references(() => campuses.unitid),
   verifiedAt: date("verified_at").notNull(),
+  displayName: text("display_name"),
+  passwordHash: text("password_hash"),
   isReviewer: boolean("is_reviewer").notNull().default(false),
   wallet: text("wallet").unique(),
   circleWalletId: text("circle_wallet_id").unique(),
@@ -36,6 +38,16 @@ export const accounts = pgTable("accounts", {
   fundingAttempt: integer("funding_attempt").notNull().default(1),
   creditCents: integer("credit_cents").notNull(),
 });
+
+export const loginAttempts = pgTable("login_attempts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull(),
+  requester: text("requester").notNull(),
+  issuedAt: date("issued_at").notNull().defaultNow(),
+}, (table) => [
+  index("login_attempts_email_issued_idx").on(table.email, table.issuedAt),
+  index("login_attempts_requester_issued_idx").on(table.requester, table.issuedAt),
+]);
 
 export const emailChallenges = pgTable("email_challenges", {
   id: uuid("id").primaryKey(),

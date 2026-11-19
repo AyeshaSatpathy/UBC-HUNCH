@@ -1,11 +1,12 @@
 /// <reference types="node" />
+/// <reference types="bun" />
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { startingBalanceCents } from "../config";
 import type { Database } from "../db";
-import { accounts, campusEmailDomains, emailChallenges, sessions } from "../schema";
+import { accounts, campusEmailDomains, emailChallenges, loginAttempts, sessions } from "../schema";
 import { sendCode } from "./mail";
 
 const lifetime = 10 * 60_000;
@@ -65,7 +66,7 @@ export async function beginVerification(db: Database, email: string, requester: 
   return { challengeId: id, expiresInSeconds: lifetime / 1_000 };
 }
 
-export async function finishVerification(db: Database, id: string, code: string) {
+export async function finishVerification(db: Database, id: string, code: string, profile?: { password: string; displayName?: string }) {
   const hash = codeDigest(id, code);
   const token = randomBytes(32).toString("base64url");
   const result = await db.transaction(async (tx) => {
@@ -87,6 +88,11 @@ export async function finishVerification(db: Database, id: string, code: string)
     }).onConflictDoNothing({ target: accounts.email });
     const [account] = await tx.select().from(accounts).where(eq(accounts.email, challenge.email));
     if (account.unitid !== challenge.unitid) return;
+    if (profile) {
+      const passwordHash = await Bun.password.hash(profile.password, { algorithm: "argon2id", memoryCost: 65536, timeCost: 2 });
+      await tx.update(accounts).set({ passwordHash, ...(profile.displayName ? { displayName: profile.displayName } : {}) }).where(eq(accounts.id, account.id));
+      await tx.delete(sessions).where(eq(sessions.accountId, account.id));
+    }
     const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60_000);
     await tx.insert(sessions).values({ accountId: account.id, tokenHash: digest(token), expiresAt });
     return { token, expiresAt: expiresAt.toISOString(), campusId: account.unitid };
@@ -103,4 +109,27 @@ export async function getSession(db: Database, authorization?: string) {
     .innerJoin(accounts, eq(accounts.id, sessions.accountId))
     .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())));
   return result ?? null;
+}
+
+let dummyHash: Promise<string> | undefined;
+export async function passwordLogin(db: Database, email: string, password: string, requester: string) {
+  dummyHash ??= Bun.password.hash(randomBytes(32).toString("hex"), { algorithm: "argon2id", memoryCost: 65536, timeCost: 2 });
+  const token = randomBytes(32).toString("base64url");
+  const result = await db.transaction(async tx => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${"password-email:" + email}, 0))`);
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${"password-ip:" + requester}, 0))`);
+    const since = new Date(Date.now() - 15 * 60_000);
+    const [emailCount] = await tx.select({ value: count() }).from(loginAttempts).where(and(eq(loginAttempts.email, email), gt(loginAttempts.issuedAt, since)));
+    const [ipCount] = await tx.select({ value: count() }).from(loginAttempts).where(and(eq(loginAttempts.requester, requester), gt(loginAttempts.issuedAt, since)));
+    if (emailCount.value >= 15 || ipCount.value >= 50) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many sign-in attempts. Try again in 15 minutes." });
+    await tx.insert(loginAttempts).values({ email, requester });
+    const [account] = await tx.select().from(accounts).where(eq(accounts.email, email)).for("share");
+    const valid = await Bun.password.verify(password, account?.passwordHash ?? await dummyHash!);
+    if (!valid || !account?.passwordHash) return null;
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60_000);
+    await tx.insert(sessions).values({ accountId: account.id, tokenHash: digest(token), expiresAt });
+    return { token, expiresAt: expiresAt.toISOString(), campusId: account.unitid };
+  });
+  if (!result) throw new TRPCError({ code: "BAD_REQUEST", message: "Email or password is incorrect. You can also sign in with an email code." });
+  return result;
 }
