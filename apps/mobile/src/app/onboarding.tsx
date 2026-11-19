@@ -3,6 +3,7 @@ import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { studentError, useSession } from '../api';
+import { GoogleSignIn } from '../google-sign-in';
 import { Button, ErrorNotice, Icon, Loading, Page, Sticker, Wordmark, c, s } from '../ui';
 
 export default function Onboarding() {
@@ -57,22 +58,18 @@ export default function Onboarding() {
   };
   const issue = verify.error ?? login.error ?? request.error;
   return <Page>
-    <Wordmark />
-    {!challenge && <View style={s.welcomeHero}>
-      <View style={{ flex: 1, gap: 8 }}>
-        <Text style={[s.heading, { fontSize: 38 }]}>Got a hunch?</Text>
-        <Text style={s.body}>Make predictions with your campus. Follow the questions everyone is talking about.</Text>
-      </View><Sticker size={100} />
-    </View>}
+    <View style={[s.row, s.between]}><Wordmark />{!challenge && <Sticker size={64} />}</View>
     {!challenge && <View style={s.segment}>
       {(['login', 'signup'] as const).map(option => <Pressable key={option} accessibilityRole="tab" accessibilityState={{ selected: mode === option, disabled: busy }} disabled={busy}
-        onPress={() => reset(option)} style={[s.button, { flex: 1, backgroundColor: mode === option ? c.lime : c.panel }]}>
+        onPress={() => reset(option)} style={[s.button, { flex: 1, minHeight: 44, backgroundColor: mode === option ? c.lilac : c.panel }]}>
         <Text style={[s.buttonText, { color: mode === option ? c.bg : c.cream }]}>{option === 'login' ? 'Log in' : 'Sign up'}</Text>
       </Pressable>)}
     </View>}
-    <View style={s.panel}>
-      <Text accessibilityRole="header" style={[s.heading, { fontSize: 26 }]}>{challenge ? 'One quick check' : mode === 'login' ? 'Good to have you back.' : mode === 'recover' ? 'A fresh start.' : 'Make yourself at home.'}</Text>
-      <Text style={s.muted}>{challenge ? 'Enter the 6-digit code sent to ' + email + '. Your password will be saved once you verify.' : mode === 'login' ? 'Your campus, your picks, right where you left them.' : mode === 'recover' ? 'Verify your school email to reset your existing password.' : 'Choose a name and password. We will verify your school email next.'}</Text>
+    <View style={{ gap: 12 }}>
+      {(challenge || mode === 'recover') && <>
+        <Text accessibilityRole="header" style={[s.heading, { fontSize: 26 }]}>{challenge ? 'One quick check' : 'Reset password'}</Text>
+        <Text style={s.muted}>{challenge ? 'Enter the six-digit code sent to ' + email.trim() + '.' : 'Verify your school email to reset your password.'}</Text>
+      </>}
       {!challenge ? <>
         {mode === 'signup' && <View style={s.field}><Text style={s.muted}>What should we call you?</Text><TextInput accessibilityLabel="Your name" value={name} onChangeText={setName} maxLength={40} placeholder="First name or nickname" placeholderTextColor={c.muted} style={s.input} autoComplete="given-name" />
           {submitted && !!nameError && <Text accessibilityRole="alert" style={s.error}>{nameError}</Text>}
@@ -88,6 +85,7 @@ export default function Onboarding() {
         </View>
         <Button label={request.isPending ? 'Sending code...' : login.isPending ? 'Logging in...' : mode === 'login' ? 'Log in' : 'Send verification code'} disabled={busy} onPress={submit} />
         {mode === 'login' && <Pressable accessibilityRole="button" disabled={busy} onPress={() => reset('recover')} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-end' }}><Text style={[s.muted, { fontSize: 13, textDecorationLine: 'underline' }]}>Reset password</Text></Pressable>}
+        {mode !== 'recover' && <GoogleSignIn key={mode} intent={mode} disabled={busy} />}
       </> : <>
         <TextInput accessibilityLabel="Verification code" placeholder="000000" placeholderTextColor={c.muted} value={code} onChangeText={value => setCode(value.replace(/\D/g, ''))} maxLength={6} keyboardType="number-pad" autoComplete="one-time-code" style={[s.input, { fontSize: 28, letterSpacing: 8, textAlign: 'center' }]} />
         <Button label={verify.isPending ? 'Verifying...' : mode === 'signup' ? 'Verify and join Hunch' : 'Save password and log in'} disabled={busy || code.length !== 6} onPress={() => verify.mutate()} />
@@ -102,6 +100,5 @@ export default function Onboarding() {
       </>}
       {!!issue && <ErrorNotice>{studentError(issue, 'Could not continue. Check your connection and try again.')}</ErrorNotice>}
     </View>
-    {!challenge && <View style={[s.row, { justifyContent: 'center' }]}><Icon name="school-outline" color={c.lime} size={18} /><Text style={s.muted}>Your school email connects you to your campus.</Text></View>}
   </Page>;
 }
