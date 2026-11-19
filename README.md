@@ -202,11 +202,13 @@ The project's SDK version must match the installed client. Expo's current iOS in
 
 The entry screen separates **Log in** and **Sign up**. Returning students use their school email and password. New students choose a display name and a password of 12–128 characters, then verify a six-digit school email code before their password is saved. Existing accounts retain their campus, balance and provisioning state.
 
-Accounts created before password login was added can choose **Set or reset password**. Enter the school email and a new password, then verify the email code once. The same flow handles forgotten passwords. A verified password reset revokes prior sessions. Passwords are hashed with Argon2id using 64 MiB of memory and two iterations. Failed and successful password attempts count toward limits of 15 per email and 50 per direct client IP in 15 minutes. Unknown accounts and wrong passwords return the same error.
+Accounts created before password login was added complete **Sign up** once with their existing school email to establish a password. The verified account and its balance are preserved. **Reset password** handles forgotten passwords for accounts that already have one. A reset cannot establish an initial password, and code-only student login is rejected. A verified password reset revokes prior sessions. Passwords are hashed with Argon2id using 64 MiB of memory and two iterations. Failed and successful password attempts count toward limits of 15 per email and 50 per direct client IP in 15 minutes. Unknown accounts and wrong passwords return the same error.
 
 Sessions last 30 days. The native app keeps its bearer token in Expo SecureStore. The browser preview persists it in local storage across tab and browser restarts and migrates older tab-scoped sessions when reopened. Sign out removes the local token and revokes the current server session. Expired queries and actions return the user to Log in.
 
-Hunch opens with a brief custom logo animation, skipped when reduced motion is enabled. The feed includes a personal greeting, featured market, horizontal campus collections and the student's existing picks. Profile lets students edit their display name. Gemini event search uses compact results with bounded scrolling.
+A brief custom logo animation plays after successful sign-in or signup and is skipped when reduced motion is enabled. Restoring an existing session opens the feed directly. The feed has only All and My Campus filters, a larger personal greeting, featured markets, horizontal campus collections, existing picks and an account-backed Saved collection. **Explore** is a separate bottom tab for searching and browsing other campuses. Profile lets students edit their display name. Gemini event search uses compact results with bounded scrolling and selectable odds bars with timestamps.
+
+Feed and Portfolio support pull-to-refresh. A first-use card explains predictions, share payouts and fees, with its dismissed state saved per account. Bookmark buttons save markets across sessions. Confirmed purchases show the choice, amount, fee and total before the student opens Portfolio. Pending or failed actions cannot display purchase success.
 
 Codes are HMAC-hashed, expire after ten minutes, allow five attempts, and are consumed once. A resend invalidates prior codes. Limits are one request per minute, five per email per hour, 20 per direct client IP per hour, and 280 app messages per rolling day. A reverse proxy shares the direct-IP bucket unless deployment adds a trusted proxy configuration.
 
@@ -317,7 +319,7 @@ The November 19 audit removed the unused public notes-write endpoint, capped API
 
 Run `bun run typecheck`, `bun run test`, and `bun run --cwd apps/mobile lint`. API tests require the migrated and seeded local database. `/health` checks the process, `/ready` checks Postgres, and `GET /webhooks/quicknode` reports whether Stream verification is configured.
 
-- The account redesign verification passed nine API tests with 93 assertions, both workspace typechecks, Expo lint and the production web export. The preceding contract audit passed all 16 Foundry tests, including 256 fuzz runs.
+- The account redesign verification passed ten API tests with 103 assertions, both workspace typechecks, Expo lint and the production web export. The preceding contract audit passed all 16 Foundry tests, including 256 fuzz runs.
 - Browser walkthrough used isolated responses for email login, session restore, logout, purchase response recovery, claim collection, publishing, and Gemini linking with locked terms. It submitted no live purchase.
 - Gemini's real settled response was fetched and accepted by the adapter. Pure settlement tests reject changed IDs, tickers, rules, pending and invalid statuses, and absent explicit outcomes.
 - Stream receiver tests verify HMAC rejection and duplicate delivery handling. The hosted Arc Logs filter returned the historical vault-deposit event correctly. Real signed QuickNode deliveries reached the Postgres inbox, and public requests with missing or incorrect signatures returned HTTP 401.
@@ -327,11 +329,11 @@ Run `bun run typecheck`, `bun run test`, and `bun run --cwd apps/mobile lint`. A
 
 ## Manual checklist
 
-1. For an existing code-only account, choose **Set or reset password**, enter your school email and a password, and verify the emailed code. For a new account, use **Sign up** and choose a display name. Sign out and use **Log in** with email and password. Reopen the app or browser and confirm the session persists, then check your existing balance and editable profile name.
-2. Search campus feeds. With the Stream active, verify a known market event appears once in Live activity and in campus totals after the consumer catches up.
+1. For an existing code-only account, complete **Sign up** with your existing school email, name and password, then verify the emailed code. For a new account, use **Sign up** and choose a display name. Sign out and use **Log in** with email and password. Reopen the app or browser and confirm the session persists, then check your existing balance and editable profile name.
+2. Open the Explore bottom tab and search campus feeds. Bookmark a market and verify it appears under Saved for later after reopening the app. Dismiss the first-use guide and verify it stays dismissed. With the Stream active, verify a known market event appears once in Live activity and in campus totals after the consumer catches up.
 3. In Create, search a Gemini event, select a contract, and inspect the pinned question and rules. Set a future trading close at or before its expiry and an evidence deadline after expiry. Publish and note its market number.
 4. Have the admin assign a separate approved reviewer. With auto-funding active, verify the draft becomes Open and that one funding receipt is logged. Check that restarting the worker preserves its four-market limit.
-5. Buy YES for $4.00. Confirm the review sheet shows $0.04 fee and $4.04 total. Tap Confirm once, wait for confirmation, and check the Portfolio balance and position.
+5. Buy YES for $4.00. Confirm the review sheet shows $0.04 fee and $4.04 total. Tap Confirm once, wait for the purchase success screen, then choose View Portfolio and check the balance and position.
 6. After trading closes and Gemini explicitly settles, open the separate Reviewer Console. It should show only the reviewer's assignments and permit only Gemini's matching outcome. Add a public reference and submit.
 7. In Portfolio, collect the payout or refund once. Confirm the new balance and that the collect button no longer offers a duplicate claim. Check prediction accuracy after a free prediction settles.
 8. Temporarily disconnect the API and Gemini connectivity. Confirm errors, retry buttons, and blocked resolution controls. Restore connectivity and verify recovery.
@@ -383,3 +385,16 @@ Preserve PostgreSQL data across restarts. Sessions, provisioning progress, opera
 ## Contract documentation
 
 See [contract setup and deployment](packages/contracts/README.md) for deployment settings, accounting rules, reviewer assignment and manual market funding.
+
+### Market illustrations
+
+The generic campus illustrations in `apps/mobile/assets/markets/` were generated with the built-in imagegen tool. They depict fictional campus scenes. Local assets reserve their layout space and show category placeholders while loading or if loading fails.
+
+The common generation prompt was "Create a wide landscape editorial illustration for Hunch, a premium college app" followed by each scene below, then "Sophisticated hand-painted gouache with subtle grain, charcoal shadows, warm cream light, lavender and muted lime accents. Rich depth, cinematic composition, restrained color, welcoming. No text, no lettering, no logos, no vehicles, no cryptocurrency imagery. Wide 3:2 composition. This is a generic fictional campus scene, not a real school."
+
+| File | Scene prompt |
+| --- | --- |
+| `campus.png` | A leafy university quad at dusk, warm windows and students walking, collegiate brick arches |
+| `sports.png` | An outdoor campus basketball court at golden hour, basketball in foreground and hoop |
+| `weather.png` | A university courtyard in gentle rain, lavender clouds, warm lights reflected on pavement |
+| `academics.png` | A cozy university library desk with open books, study lamp and arched windows |

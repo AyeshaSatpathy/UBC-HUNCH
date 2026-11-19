@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { actionKey, isOpen, money, shares, studentError, useAccount, useAction, usePortfolio, useSession } from '../api';
 import { Sheet } from '../sheet';
-import { Button, ErrorNotice, Loading, c, s } from '../ui';
+import { Button, ErrorNotice, Icon, Loading, c, s } from '../ui';
 
 export default function Buy() {
   const { id, side: value, amount } = useLocalSearchParams<{ id: string; side: string; amount?: string }>();
@@ -45,10 +45,18 @@ export default function Buy() {
     if (operation.data?.status !== 'confirmed') return;
     void client.invalidateQueries({ queryKey: ['portfolio'] });
     void client.invalidateQueries({ queryKey: ['market', id] });
-    router.dismissTo('/portfolio');
   }, [operation.data?.status, client, id]);
   if (loading) return <Sheet title="Buy"><Loading>Opening Hunch…</Loading></Sheet>;
   if (!signedIn) return <Redirect href="/onboarding" />;
+  if (operation.data?.status === 'confirmed') return <Sheet title="Purchase confirmed">
+    <View style={{ alignItems: 'center', gap: 12 }}><Icon name="checkmark-circle" size={56} color={c.lime} />
+      <Text style={s.heading}>Your pick is in.</Text>
+      <Text style={s.body}>{market?.question}</Text>
+      <Text style={s.body}>{money(submission?.cents ?? cents)} on {side}</Text>
+      {estimate && <Text style={s.muted}>{money(estimate.totalCents)} paid, including {money(estimate.feeCents)} fee.</Text>}
+    </View>
+    <Button label="View Portfolio" onPress={() => router.dismissTo('/portfolio')} />
+  </Sheet>;
   const active = !!requestId && operation.data?.status !== 'failed';
   const checking = !!fixed && !requestId && !buy.isPending;
   const available = portfolio.data?.balanceCents;

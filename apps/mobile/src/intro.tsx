@@ -22,7 +22,11 @@ export function Intro({ onDone }: { onDone: () => void }) {
   }, [onDone, reveal, fade]);
   return <Animated.View accessibilityLabel="Hunch is opening" style={{ position: 'absolute', inset: 0, zIndex: 100, backgroundColor: c.bg, justifyContent: 'center', alignItems: 'center', opacity: fade }}>
     <Animated.View style={{ opacity: reveal, transform: [{ scale: reveal.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }, { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }] }}>
-      <Text style={[s.heading, { fontSize: 72, letterSpacing: -4 }]}>hunch<Text style={{ color: c.lime }}>.</Text></Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={[s.heading, { fontSize: 72, letterSpacing: -4 }]}>hunch</Text>
+        <Animated.View style={{ width: 13, height: 13, borderRadius: 7, marginLeft: 6, marginTop: 29, backgroundColor: c.lime,
+          transform: [{ scale: reveal.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.2, 1.5, 1] }) }] }} />
+      </View>
       <View style={{ height: 3, backgroundColor: c.lime, borderRadius: 2, marginTop: 6 }} />
       <Text style={[s.muted, { textAlign: 'center', marginTop: 18 }]}>Your campus. Your call.</Text>
     </Animated.View>

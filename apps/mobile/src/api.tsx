@@ -21,9 +21,11 @@ export type Position = Awaited<ReturnType<Api['portfolio']['get']['query']>>['po
 export type Action = Awaited<ReturnType<Api['actions']['pending']['query']>>[number];
 export type Side = 'YES' | 'NO';
 
-const Context = createContext<{ api: Api; loading: boolean; signedIn: boolean; setSession: (token: string | null) => Promise<void> } | null>(null);
+const Context = createContext<{ api: Api; loading: boolean; signedIn: boolean; showIntro: boolean; finishIntro: () => void; setSession: (token: string | null) => Promise<void> } | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const [showIntro, setShowIntro] = useState(false);
+  const finishIntro = useCallback(() => setShowIntro(false), []);
   const [token, setToken] = useState<string | null>();
   const queryClient = useQueryClient();
   useEffect(() => {
@@ -46,6 +48,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     else await SecureStore.deleteItemAsync(key);
     await queryClient.cancelQueries();
     queryClient.clear();
+    setShowIntro(!!next);
     setToken(next);
   }, [queryClient]);
   useEffect(() => queryClient.getQueryCache().subscribe((event) => {
@@ -59,7 +62,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (error instanceof TRPCClientError && error.data?.code === 'UNAUTHORIZED') void setSession(null);
   }), [queryClient, setSession]);
   return <Context.Provider value={{
-    api, loading: token === undefined, signedIn: !!token, setSession,
+    api, loading: token === undefined, signedIn: !!token, setSession, showIntro, finishIntro,
   }}>{children}</Context.Provider>;
 }
 
@@ -97,6 +100,11 @@ export function usePortfolio() {
   });
 }
 
+export function useSavedMarkets() {
+  const { api, signedIn } = useSession();
+  return useQuery({ queryKey: ['saved-markets'], queryFn: ({ signal }) => api.markets.saved.query(undefined, { signal }), enabled: signedIn });
+}
+
 export function useAction(id?: string | null) {
   const { api, signedIn } = useSession();
   return useQuery({
@@ -113,6 +121,10 @@ export function studentError(error: unknown, fallback: string) {
   if (error.data?.code === 'TOO_MANY_REQUESTS') return error.message.startsWith('Too many sign-in') ? 'Too many attempts. Try again in 15 minutes.' : 'Please wait a minute before requesting another code.';
   if (error.data?.code === 'UNAUTHORIZED') return 'Please sign in again.';
   const messages: Record<string, string> = {
+    'Complete Sign up first to create your password.': 'Use Sign up to create your password first.',
+    'Complete sign up and choose a password to continue.': 'Use Sign up to create your password first.',
+    'You already have an account. Use Log in or Reset password.': 'You already have an account. Use Log in or Reset password.',
+
     'Email or password is incorrect. You can also sign in with an email code.': 'Email or password is incorrect. Try again or use an email code.',
     'This school email domain is not supported': 'This school email domain is not supported.',
     'This email does not match the selected campus.': 'This email does not match the selected campus.',

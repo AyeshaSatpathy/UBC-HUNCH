@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export const c = { bg: '#0D0D0E', panel: '#181819', border: '#514D49', cream: '#FFF4E2', muted: '#CCC5BC', lime: '#DCFF3E', lilac: '#CBA5F9', error: '#FFAEAB' };
@@ -27,9 +27,10 @@ export const s = StyleSheet.create({
   error: { color: c.error, fontSize: 15, lineHeight: 21 },
 });
 
-export function Page({ children, tabbed = false }: { children: ReactNode; tabbed?: boolean }) {
+export function Page({ children, tabbed = false, onRefresh, refreshing = false }: { children: ReactNode; tabbed?: boolean; onRefresh?: () => void; refreshing?: boolean }) {
   return <SafeAreaView edges={tabbed ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']} style={s.screen}>
-    <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>
+    <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}
+      refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.lime} colors={[c.lime]} /> : undefined}>
       {children}
     </ScrollView>
   </SafeAreaView>;

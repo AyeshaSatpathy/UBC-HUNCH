@@ -35,6 +35,7 @@ export function GeminiSearch({ onSelect }: { onSelect: (item: GeminiChoice) => v
 
 export function GeminiOdds({ marketId, crowd }: { marketId: string; crowd: number }) {
   const { api } = useSession();
+  const [selectedAt, setSelectedAt] = useState<string>();
   const result = useQuery({ queryKey: ['gemini-market', marketId],
     queryFn: ({ signal }) => api.gemini.market.query({ marketId }, { signal }), refetchInterval: 30_000, retry: false });
   if (result.isPending) return <Loading>Checking Gemini odds…</Loading>;
@@ -42,17 +43,21 @@ export function GeminiOdds({ marketId, crowd }: { marketId: string; crowd: numbe
   if (!result.data) return null;
   const data = result.data;
   const points = data.history.slice(-40);
+  const selected = points.find(point => point.at === selectedAt) ?? points.at(-1);
   return <View style={s.panel}>
     <Text style={s.label}>Gemini and campus odds</Text>
     <Text style={s.body}>Campus YES {crowd}% · Gemini YES {data.yesPercent == null ? 'unavailable' : data.yesPercent + '%'}</Text>
     {data.outcome && <Text style={s.body}>Gemini settled {data.outcome}</Text>}
     <Text style={s.label}>Gemini odds over time</Text>
     {points.length < 2 ? <Note>History is building as Gemini prices arrive.</Note> : <>
-      <View accessibilityRole="image" accessibilityLabel={'Gemini YES odds from ' + points[0].yes + '% to ' + points.at(-1)!.yes + '%'}
-        style={{ height: 110, flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
-        {points.map(point => <View key={point.at} style={{ flex: 1, height: Math.max(2, point.yes) + '%', backgroundColor: c.lilac, borderRadius: 2 }} />)}
-      </View>
-      <Text style={s.muted}>{new Date(points[0].at).toLocaleString()} – {new Date(points.at(-1)!.at).toLocaleString()}</Text>
+      <Text accessibilityLiveRegion="polite" style={s.body}>{selected!.yes}% YES · {new Date(selected!.at).toLocaleString()}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ alignItems: 'flex-end' }}>
+        {points.map(point => <Pressable key={point.at} accessibilityRole="button" accessibilityLabel={point.yes + '% YES at ' + new Date(point.at).toLocaleString()}
+          accessibilityState={{ selected: selected?.at === point.at }} onPress={() => setSelectedAt(point.at)} style={{ width: 44, height: 110, paddingHorizontal: 8, justifyContent: 'flex-end' }}>
+          <View style={{ height: Math.max(2, point.yes) + '%', backgroundColor: selected?.at === point.at ? c.lime : c.lilac, borderRadius: 4 }} />
+        </Pressable>)}
+      </ScrollView>
+      <Text style={s.muted}>Swipe through history. Tap a bar to see its odds and time.</Text>
     </>}
   </View>;
 }

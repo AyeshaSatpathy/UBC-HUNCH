@@ -65,9 +65,10 @@ function Claim({ position }: { position: Position }) {
 export default function Portfolio() {
   const { api } = useSession();
   const data = usePortfolio();
+  const [refreshing, setRefreshing] = useState(false);
   const pending = useQuery({ queryKey: ['pending-actions'], queryFn: ({ signal }) => api.actions.pending.query(undefined, { signal }) });
   const positions = data.data?.positions.filter(item => item.paidCents !== '0' || item.yesSharesMillionths !== '0' || item.noSharesMillionths !== '0') ?? [];
-  return <Page tabbed>
+  return <Page tabbed refreshing={refreshing} onRefresh={() => { setRefreshing(true); void Promise.all([data.refetch(), pending.refetch()]).finally(() => setRefreshing(false)); }}>
     <Text accessibilityRole="header" style={s.heading}>Portfolio</Text>
     <View style={s.panel}>
       <Text style={s.muted}>Available balance</Text>

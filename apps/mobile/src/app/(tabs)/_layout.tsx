@@ -16,6 +16,7 @@ export default function TabsLayout() {
     tabBarLabelStyle: { fontSize: 12, fontWeight: '700' },
   }}>
     <Tabs.Screen name="feed" options={{ title: 'Feed', tabBarIcon: ({ focused }) => <Icon name="home-outline" color={focused ? c.lime : c.cream} /> }} />
+    <Tabs.Screen name="explore" options={{ title: 'Explore', tabBarAccessibilityLabel: 'Explore Campus', tabBarIcon: ({ focused }) => <Icon name="compass-outline" color={focused ? c.lime : c.cream} /> }} />
     <Tabs.Screen name="create" options={{ title: 'Create', tabBarIcon: ({ focused }) => <Icon name="add-circle-outline" color={focused ? c.lime : c.cream} /> }} />
     <Tabs.Screen name="portfolio" options={{ title: 'Portfolio', tabBarIcon: ({ focused }) => <Icon name="bar-chart-outline" color={focused ? c.lime : c.cream} /> }} />
     <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ focused }) => <Icon name="person-outline" color={focused ? c.lime : c.cream} /> }} />

@@ -21,7 +21,7 @@ export default function Onboarding() {
     return () => clearTimeout(timer);
   }, [cooldown]);
   const request = useMutation({
-    mutationFn: () => api.auth.requestCode.mutate({ email: email.trim() }),
+    mutationFn: () => api.auth.requestCode.mutate({ email: email.trim(), intent: mode === 'recover' ? 'reset' : 'signup' }),
     onSuccess: result => { setChallenge(result.challengeId); setCode(''); setCooldown(60); },
   });
   const login = useMutation({
@@ -58,16 +58,16 @@ export default function Onboarding() {
     </View>}
     <View style={s.panel}>
       <Text accessibilityRole="header" style={[s.heading, { fontSize: 26 }]}>{challenge ? 'One quick check' : mode === 'login' ? 'Good to have you back.' : mode === 'recover' ? 'A fresh start.' : 'Make yourself at home.'}</Text>
-      <Text style={s.muted}>{challenge ? 'Enter the 6-digit code sent to ' + email + '. Your password will be saved once you verify.' : mode === 'login' ? 'Your campus, your picks, right where you left them.' : mode === 'recover' ? 'Verify your school email to set or reset your password.' : 'Choose a name and password. We will verify your school email next.'}</Text>
+      <Text style={s.muted}>{challenge ? 'Enter the 6-digit code sent to ' + email + '. Your password will be saved once you verify.' : mode === 'login' ? 'Your campus, your picks, right where you left them.' : mode === 'recover' ? 'Verify your school email to reset your existing password.' : 'Choose a name and password. We will verify your school email next.'}</Text>
       {!challenge ? <>
         {mode === 'signup' && <View style={s.field}><Text style={s.muted}>What should we call you?</Text><TextInput accessibilityLabel="Your name" value={name} onChangeText={setName} maxLength={40} placeholder="First name or nickname" placeholderTextColor={c.muted} style={s.input} autoComplete="given-name" /></View>}
         <View style={s.field}><Text style={s.muted}>School email</Text><TextInput accessibilityLabel="School email" value={email} onChangeText={setEmail} placeholder="you@school.edu" placeholderTextColor={c.muted} style={s.input} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" /></View>
         <View style={s.field}><Text style={s.muted}>{mode === 'login' ? 'Password' : 'Choose a password'}</Text>
-          <View style={s.row}><TextInput accessibilityLabel="Password" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder={mode === 'login' ? 'Your password' : 'At least 12 characters'} placeholderTextColor={c.muted} maxLength={128} style={[s.input, { flex: 1 }]} />
-            <Pressable accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} style={s.iconButton} onPress={() => setShowPassword(!showPassword)}><Icon name={showPassword ? 'eye-off-outline' : 'eye-outline'} /></Pressable></View>
+          <View style={{ position: 'relative' }}><TextInput accessibilityLabel="Password" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder={mode === 'login' ? 'Your password' : 'At least 12 characters'} placeholderTextColor={c.muted} maxLength={128} style={[s.input, { width: '100%', paddingRight: 56 }]} />
+            <Pressable accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} style={[s.iconButton, { position: 'absolute', right: 2, top: 2 }]} onPress={() => setShowPassword(!showPassword)}><Icon name={showPassword ? 'eye-off-outline' : 'eye-outline'} /></Pressable></View>
         </View>
         <Button label={busy ? 'Just a moment...' : mode === 'login' ? 'Log in' : 'Send verification code'} disabled={busy || !validEmail || password.length < (mode === 'login' ? 1 : 12) || (mode === 'signup' && !name.trim())} onPress={() => mode === 'login' ? login.mutate() : request.mutate()} />
-        {mode === 'login' && <Button label="Set or reset password" tone="quiet" disabled={busy} onPress={() => reset('recover')} />}
+        {mode === 'login' && <Pressable accessibilityRole="button" disabled={busy} onPress={() => reset('recover')} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-end' }}><Text style={[s.muted, { fontSize: 13, textDecorationLine: 'underline' }]}>Reset password</Text></Pressable>}
       </> : <>
         <TextInput accessibilityLabel="Verification code" placeholder="000000" placeholderTextColor={c.muted} value={code} onChangeText={value => setCode(value.replace(/\D/g, ''))} maxLength={6} keyboardType="number-pad" autoComplete="one-time-code" style={[s.input, { fontSize: 28, letterSpacing: 8, textAlign: 'center' }]} />
         <Button label={verify.isPending ? 'Verifying...' : mode === 'signup' ? 'Verify and join Hunch' : 'Save password and log in'} disabled={busy || code.length !== 6} onPress={() => verify.mutate()} />
