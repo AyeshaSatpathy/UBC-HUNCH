@@ -1,4 +1,4 @@
-import { asc, eq, isNull, sql } from "drizzle-orm";
+import { asc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import {
   createWalletClient, encodeFunctionData, isAddress, keccak256, parseEventLogs,
   TransactionReceiptNotFoundError, type Address, type Hash, type TransactionSerialized,
@@ -9,6 +9,7 @@ import { accounts } from "../schema";
 import { blockchain, circle, findCircleTransaction, reportFailure, requestId } from "../seed/circle";
 import { arcTestnet, arcTransport, chainId, collateralAbi, createArcClient, market, marketAbi, usdc } from "./contract";
 import { centsToUnits } from "./market-api";
+import { advanceDeposit } from "./deposits";
 
 const arc = createArcClient();
 
@@ -39,8 +40,8 @@ async function main() {
     return db.transaction(async (tx: Tx) => {
       const [lock] = await tx.execute<{ locked: boolean }>(sql`select pg_try_advisory_xact_lock(hashtextextended('hunch-account-provisioning', 0)) as locked`);
       if (!lock?.locked) return;
-      const [account] = await tx.select().from(accounts).where(isNull(accounts.fundedAt))
-        .orderBy(asc(accounts.verifiedAt), asc(accounts.id)).limit(1);
+      const [account] = await tx.select().from(accounts).where(or(isNull(accounts.fundedAt), isNotNull(accounts.pendingCampusId)))
+        .orderBy(sql`${accounts.pendingCampusId} is null`, asc(accounts.verifiedAt), asc(accounts.id)).limit(1);
       if (!account) return;
       const save = (values: Partial<typeof accounts.$inferInsert>) =>
         tx.update(accounts).set(values).where(eq(accounts.id, account.id));
@@ -60,16 +61,17 @@ async function main() {
         return;
       }
       const address = account.wallet as Address;
-      if (!account.registeredAt) {
+      if (!account.registeredAt || account.pendingCampusId) {
+        const target = account.pendingCampusId ?? account.unitid;
         const unitid = await arc.readContract({ address: market, abi: marketAbi, functionName: "campusOf", args: [address] });
-        if (unitid === BigInt(account.unitid)) {
-          await save({ registeredAt: new Date(), registrationTx: null });
+        if (unitid === BigInt(target)) {
+          await save({ unitid: target, pendingCampusId: null, registeredAt: new Date(), registrationTx: null });
           return;
         }
-        if (unitid !== 0n) throw new Error("Wallet has a different campus registration");
+        if (unitid !== 0n && (!account.pendingCampusId || unitid !== BigInt(account.unitid))) throw new Error("Wallet has a different campus registration");
         if (!account.registrationTx) {
           const prepared = await wallet.prepareTransactionRequest({
-            to: market, data: encodeFunctionData({ abi: marketAbi, functionName: "register", args: [address, BigInt(account.unitid)] }),
+            to: market, data: encodeFunctionData({ abi: marketAbi, functionName: "register", args: [address, BigInt(target)] }),
           });
           await save({ registrationTx: await wallet.signTransaction(prepared) });
           return; // Persist the signed transaction before broadcasting it.
@@ -131,6 +133,8 @@ async function main() {
   try {
     do {
       await advanceOne();
+      try { await advanceDeposit(db, treasury, treasuryWallet.id); }
+      catch { console.warn('Deposit confirmation will be retried.'); }
       if (follow && !stopping) await Bun.sleep(3_000);
     } while (follow && !stopping);
   } finally { await client.end(); }

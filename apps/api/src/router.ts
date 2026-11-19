@@ -3,7 +3,8 @@ import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "./db";
 import { accounts, campuses, savedMarkets, sessions } from "./schema";
-import { beginVerification, finishVerification, getSession, passwordLogin, schoolEmail } from "./auth/accounts";
+import { beginVerification, confirmCampusChange, finishVerification, getSession, passwordLogin, schoolEmail } from "./auth/accounts";
+import { depositHistory, depositStatus, submitDeposit } from './arc/deposits';
 import { getMarket, listMarkets, listSavedMarkets, portfolio, previewClaim, quoteMarket } from "./arc/market-api";
 import { claimStatus, submitClaim } from "./arc/claims";
 import { advanceStudentOperation, pendingStudentOperations, startStudentOperation } from "./arc/student-operations";
@@ -43,7 +44,22 @@ export const appRouter = t.router({
     settings: signedIn.query(({ ctx }) => ({
       email: ctx.session.account.email,
       hasPassword: !!ctx.session.account.passwordHash,
+      pendingCampusId: ctx.session.account.pendingCampusId,
+      notificationsEnabled: ctx.session.account.notificationsEnabled,
     })),
+    setNotifications: signedIn.input(z.object({ enabled: z.boolean() })).mutation(async ({ ctx, input }) => {
+      await ctx.db.update(accounts).set({ notificationsEnabled: input.enabled }).where(eq(accounts.id, ctx.session.account.id));
+      return input;
+    }),
+    requestCampusChange: signedIn.input(z.object({ email: schoolEmail })).mutation(({ ctx, input }) => {
+      const account = ctx.session.account;
+      if (!account.fundedAt || !account.wallet || account.pendingCampusId || account.isReviewer) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This campus change is unavailable for your account.' });
+      }
+      return beginVerification(ctx.db, input.email, ctx.requester, undefined, undefined, `campus:${account.id}`);
+    }),
+    verifyCampusChange: signedIn.input(z.object({ challengeId: z.uuid(), code: z.string().regex(/^\d{6}$/) }))
+      .mutation(({ ctx, input }) => confirmCampusChange(ctx.db, ctx.session.account.id, input.challengeId, input.code)),
     signOutOtherSessions: signedIn.mutation(async ({ ctx }) => {
       const revoked = await ctx.db.delete(sessions).where(and(
         eq(sessions.accountId, ctx.session.account.id),
@@ -82,6 +98,12 @@ export const appRouter = t.router({
       await ctx.db.delete(sessions).where(eq(sessions.tokenHash, ctx.session.tokenHash));
       return { signedOut: true as const };
     }),
+  }),
+  deposits: t.router({
+    history: signedIn.query(({ ctx }) => depositHistory(ctx.db, ctx.session.account)),
+    status: signedIn.input(z.object({ id: z.uuid() })).query(({ ctx, input }) => depositStatus(ctx.db, ctx.session.account.id, input.id)),
+    confirm: signedIn.input(z.object({ requestKey, cents: z.union([z.literal(500), z.literal(1000), z.literal(2500)]), card: z.enum(['4242', '0002']) }))
+      .mutation(({ ctx, input }) => submitDeposit(ctx.db, ctx.session.account, input)),
   }),
   markets: t.router({
     saved: signedIn.query(({ ctx }) => listSavedMarkets(ctx.db, ctx.session.account.id)),

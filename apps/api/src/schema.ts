@@ -26,6 +26,8 @@ export const accounts = pgTable("accounts", {
   email: text("email").notNull().unique(),
   unitid: integer("unitid").notNull().references(() => campuses.unitid),
   verifiedAt: date("verified_at").notNull(),
+  pendingCampusId: integer("pending_campus_id").references(() => campuses.unitid),
+  notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
   displayName: text("display_name"),
   passwordHash: text("password_hash"),
   hasSeenGuide: boolean("has_seen_guide").notNull().default(false),
@@ -115,6 +117,17 @@ export const geminiLinks = pgTable("gemini_links", {
   ticker: text("ticker").notNull(),
   fingerprint: text("fingerprint").notNull(),
 });
+
+export const deposits = pgTable("deposits", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id").notNull().references(() => accounts.id),
+  requestKey: text("request_key").notNull(),
+  card: text("card").$type<'4242' | '0002'>().notNull(),
+  cents: integer("cents").notNull(),
+  status: text("status").$type<'pending' | 'confirmed' | 'declined' | 'failed'>().notNull(),
+  circleId: text("circle_id").unique(),
+  createdAt: date("created_at").notNull().defaultNow(),
+}, table => [index('deposits_account_created_idx').on(table.accountId, table.createdAt), index('deposits_status_created_idx').on(table.status, table.createdAt)]);
 
 export const geminiOdds = pgTable("gemini_odds", {
   contractId: text("contract_id").notNull(),

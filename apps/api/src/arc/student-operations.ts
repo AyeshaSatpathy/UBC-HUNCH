@@ -43,6 +43,10 @@ export async function startStudentOperation(db: Database, account: Account, requ
   const { address } = requireReady(account);
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${"student-operation:" + account.id}, 0))`);
+    const [current] = await tx.select({ unitid: accounts.unitid, pendingCampusId: accounts.pendingCampusId }).from(accounts).where(eq(accounts.id, account.id));
+    if (!current || current.pendingCampusId || current.unitid !== account.unitid) {
+      throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Campus change is in progress. Try again shortly.' });
+    }
     const owned = eq(studentOperations.accountId, account.id);
     const [prior] = await tx.select().from(studentOperations).where(and(owned, eq(studentOperations.requestKey, requestKey)));
     if (prior) {

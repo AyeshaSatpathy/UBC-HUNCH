@@ -30,7 +30,7 @@ test('verified password signup, returning login, reset and throttling preserve t
     const login = await passwordLogin(db, email, password, requester);
     expect((await getSession(db, 'Bearer ' + login.token))!.account.id).toBe(accountId);
     const settings = appRouter.createCaller({ db, requester, authorization: 'Bearer ' + login.token });
-    expect(await settings.auth.settings()).toEqual({ email, hasPassword: true });
+    expect(await settings.auth.settings()).toMatchObject({ email, hasPassword: true, notificationsEnabled: true });
     expect(await settings.auth.signOutOtherSessions()).toEqual({ revoked: 1 });
     expect(await getSession(db, 'Bearer ' + signup.token)).toBeNull();
     expect(await settings.auth.me()).toMatchObject({ displayName: 'Alex' });

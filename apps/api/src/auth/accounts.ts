@@ -2,11 +2,11 @@
 /// <reference types="bun" />
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, count, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { startingBalanceCents } from "../config";
 import type { Database } from "../db";
-import { accounts, campusEmailDomains, emailChallenges, loginAttempts, sessions } from "../schema";
+import { accounts, campusEmailDomains, emailChallenges, loginAttempts, sessions, studentOperations } from "../schema";
 import { sendCode } from "./mail";
 
 const lifetime = 10 * 60_000;
@@ -23,7 +23,7 @@ function codeDigest(id: string, code: string) {
   return createHmac("sha256", Buffer.from(secret, "hex")).update(id).update(":").update(code).digest("hex");
 }
 
-export async function beginVerification(db: Database, email: string, requester: string, mail = sendCode, campusId?: number, intent: 'signup' | 'reset' | 'legacy' = 'legacy') {
+export async function beginVerification(db: Database, email: string, requester: string, mail = sendCode, campusId?: number, intent: 'signup' | 'reset' | 'legacy' | `campus:${string}` = 'legacy') {
   const id = randomUUID();
   const code = String(randomInt(1_000_000)).padStart(6, "0");
   const codeHash = codeDigest(id, code);
@@ -45,9 +45,16 @@ export async function beginVerification(db: Database, email: string, requester: 
       throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Please wait before requesting another code" });
     }
     const [existing] = await tx.select({ unitid: accounts.unitid }).from(accounts).where(eq(accounts.email, email));
+    if (existing && intent.startsWith('campus:')) {
+      throw new TRPCError({ code: 'CONFLICT', message: 'Use a school email that is not already linked to Hunch.' });
+    }
     const [mapped] = await tx.select().from(campusEmailDomains).where(eq(campusEmailDomains.domain, domain));
     const campus = existing ?? mapped;
     if (!campus) throw new TRPCError({ code: "BAD_REQUEST", message: "This school email domain is not supported" });
+    if (intent.startsWith('campus:')) {
+      const [account] = await tx.select({ unitid: accounts.unitid }).from(accounts).where(eq(accounts.id, intent.slice(7)));
+      if (account?.unitid === campus.unitid) throw new TRPCError({ code: 'BAD_REQUEST', message: 'That email belongs to your current campus.' });
+    }
     if (campusId !== undefined && campus.unitid !== campusId) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "This email does not match the selected campus." });
     }
@@ -72,7 +79,7 @@ export async function finishVerification(db: Database, id: string, code: string,
   const result = await db.transaction(async (tx) => {
     const [challenge] = await tx.select().from(emailChallenges).where(eq(emailChallenges.id, id)).for("update");
     const now = new Date();
-    if (!challenge || challenge.consumedAt || challenge.expiresAt <= now || challenge.attempts >= maxAttempts) return;
+    if (!challenge || challenge.intent.startsWith('campus:') || challenge.consumedAt || challenge.expiresAt <= now || challenge.attempts >= maxAttempts) return;
     if (!timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(challenge.codeHash, "hex"))) {
       await tx.update(emailChallenges).set({ attempts: challenge.attempts + 1 }).where(eq(emailChallenges.id, id));
       return;
@@ -102,6 +109,36 @@ export async function finishVerification(db: Database, id: string, code: string,
   });
   if (!result) throw new TRPCError({ code: "BAD_REQUEST", message: "The code is invalid or expired" });
   return result;
+}
+
+export async function confirmCampusChange(db: Database, accountId: string, id: string, code: string) {
+  const confirmed = await db.transaction(async tx => {
+    const [challenge] = await tx.select().from(emailChallenges).where(eq(emailChallenges.id, id)).for('update');
+    const now = new Date();
+    if (!challenge || challenge.intent !== `campus:${accountId}` || challenge.consumedAt || challenge.expiresAt <= now || challenge.attempts >= maxAttempts) return false;
+    if (!timingSafeEqual(Buffer.from(codeDigest(id, code), 'hex'), Buffer.from(challenge.codeHash, 'hex'))) {
+      await tx.update(emailChallenges).set({ attempts: challenge.attempts + 1 }).where(eq(emailChallenges.id, id));
+      return false;
+    }
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'student-operation:' + accountId}, 0))`);
+    const [account] = await tx.select().from(accounts).where(eq(accounts.id, accountId)).for('update');
+    if (!account?.fundedAt || !account.wallet || account.pendingCampusId || account.unitid === challenge.unitid || account.isReviewer) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'This campus change is unavailable for your account.' });
+    }
+    const [active] = await tx.select({ id: studentOperations.id }).from(studentOperations)
+      .where(and(eq(studentOperations.accountId, accountId), inArray(studentOperations.stage, ['approval', 'submit']))).limit(1);
+    if (active) throw new TRPCError({ code: 'CONFLICT', message: 'Wait for your pending market action to finish.' });
+    const [mapped] = await tx.select().from(campusEmailDomains).where(eq(campusEmailDomains.domain, challenge.email.split('@').at(-1)!));
+    if (mapped?.unitid !== challenge.unitid) return false;
+    await tx.update(emailChallenges).set({ consumedAt: now }).where(eq(emailChallenges.id, id));
+    await tx.update(accounts).set({ email: challenge.email, pendingCampusId: challenge.unitid, registrationTx: null }).where(eq(accounts.id, accountId));
+    return true;
+  }).catch(error => {
+    if (error?.cause?.code === '23505') throw new TRPCError({ code: 'CONFLICT', message: 'Use a school email that is not already linked to Hunch.' });
+    throw error;
+  });
+  if (!confirmed) throw new TRPCError({ code: 'BAD_REQUEST', message: 'The code is invalid or expired' });
+  return { pending: true };
 }
 
 export async function getSession(db: Database, authorization?: string) {
