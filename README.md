@@ -216,6 +216,14 @@ The import uses [IPEDS HD2024](https://nces.ed.gov/ipeds/datacenter/data/HD2024.
 
 Money is represented as six-decimal integers in contract operations and integer-cent strings in the UI API. Displayed charges round up to cents. Balances and payout previews round down. The full six-decimal amount is retained for execution. At $4.00 principal, the fee is $0.04 and the debit is $4.04.
 
+## Account settings and payments
+
+Open **Profile → Settings** to view your verified school email and campus, edit your name, change an existing password with an email code, sign out other sessions, or restore the getting started guide.
+
+Hunch currently uses test credits. After school email verification, the provisioning worker creates a Circle-managed account on Arc testnet, registers the campus, and sends the configured starting credit from the testnet treasury. A purchase uses that balance and includes a 1% fee. The backend submits the approval and purchase through Circle. After a market settles, a successful claim returns any payout or refund to the in-app balance.
+
+Real deposits would need a payment provider approved for the product and jurisdiction. An integration would start with provider-hosted checkout. The backend would record a pending deposit and verify the provider's signed payment events before issuing one credit per confirmed deposit. The production design also needs reconciliation, chargeback and refund handling, and a separate cash withdrawal flow. The local testnet treasury only issues test credits.
+
 ## QuickNode Streams
 
 ### Required configuration

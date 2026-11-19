@@ -1,5 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "./db";
 import { accounts, campuses, savedMarkets, sessions } from "./schema";
@@ -40,6 +40,21 @@ export const appRouter = t.router({
   leaderboard: t.procedure.input(z.object({ campusId: campusId.optional() }))
     .query(({ ctx, input }) => leaderboard(ctx.db, input.campusId)),
   auth: t.router({
+    settings: signedIn.query(({ ctx }) => ({
+      email: ctx.session.account.email,
+      hasPassword: !!ctx.session.account.passwordHash,
+    })),
+    signOutOtherSessions: signedIn.mutation(async ({ ctx }) => {
+      const revoked = await ctx.db.delete(sessions).where(and(
+        eq(sessions.accountId, ctx.session.account.id),
+        ne(sessions.tokenHash, ctx.session.tokenHash),
+      )).returning({ accountId: sessions.accountId });
+      return { revoked: revoked.length };
+    }),
+    showGuide: signedIn.mutation(async ({ ctx }) => {
+      await ctx.db.update(accounts).set({ hasSeenGuide: false }).where(eq(accounts.id, ctx.session.account.id));
+      return { shown: true };
+    }),
     dismissGuide: signedIn.mutation(async ({ ctx }) => {
       await ctx.db.update(accounts).set({ hasSeenGuide: true }).where(eq(accounts.id, ctx.session.account.id));
       return { dismissed: true };

@@ -21,7 +21,7 @@ export type Position = Awaited<ReturnType<Api['portfolio']['get']['query']>>['po
 export type Action = Awaited<ReturnType<Api['actions']['pending']['query']>>[number];
 export type Side = 'YES' | 'NO';
 
-const Context = createContext<{ api: Api; loading: boolean; signedIn: boolean; showIntro: boolean; finishIntro: () => void; setSession: (token: string | null) => Promise<void> } | null>(null);
+const Context = createContext<{ api: Api; loading: boolean; signedIn: boolean; showIntro: boolean; finishIntro: () => void; setSession: (token: string | null, animate?: boolean) => Promise<void> } | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [showIntro, setShowIntro] = useState(false);
@@ -39,7 +39,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void read().then(setToken, () => setToken(null));
   }, []);
   const api = useMemo(() => token ? makeApi(token) : publicApi, [token]);
-  const setSession = useCallback(async (next: string | null) => {
+  const setSession = useCallback(async (next: string | null, animate = true) => {
     if (Platform.OS === 'web') {
       if (next) globalThis.localStorage?.setItem(key, next);
       else globalThis.localStorage?.removeItem(key);
@@ -48,7 +48,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     else await SecureStore.deleteItemAsync(key);
     await queryClient.cancelQueries();
     queryClient.clear();
-    setShowIntro(!!next);
+    setShowIntro(!!next && animate);
     setToken(next);
   }, [queryClient]);
   useEffect(() => queryClient.getQueryCache().subscribe((event) => {

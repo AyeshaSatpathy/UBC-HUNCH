@@ -30,6 +30,8 @@ test('bookmarks survive retries, remain private to their owner and remove cleanl
     await users[0].auth.dismissGuide();
     expect((await users[0].auth.me()).hasSeenGuide).toBe(true);
     expect((await users[1].auth.me()).hasSeenGuide).toBe(false);
+    await users[0].auth.showGuide();
+    expect((await users[0].auth.me()).hasSeenGuide).toBe(false);
     await users[0].markets.save({ marketId: id, saved: false });
     expect(await users[0].markets.saved()).toEqual([]);
     const guest = appRouter.createCaller({ db, requester: 'guest' });

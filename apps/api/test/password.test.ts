@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { beginVerification, finishVerification, getSession, passwordLogin } from '../src/auth/accounts';
 import { connectDatabase } from '../src/db';
+import { appRouter } from '../src/router';
 import { accounts, emailChallenges, loginAttempts, sessions } from '../src/schema';
 
 test('verified password signup, returning login, reset and throttling preserve the original account', async () => {
@@ -28,6 +29,11 @@ test('verified password signup, returning login, reset and throttling preserve t
     await expect(passwordLogin(db, email, 'wrong password', requester)).rejects.toThrow('Email or password');
     const login = await passwordLogin(db, email, password, requester);
     expect((await getSession(db, 'Bearer ' + login.token))!.account.id).toBe(accountId);
+    const settings = appRouter.createCaller({ db, requester, authorization: 'Bearer ' + login.token });
+    expect(await settings.auth.settings()).toEqual({ email, hasPassword: true });
+    expect(await settings.auth.signOutOtherSessions()).toEqual({ revoked: 1 });
+    expect(await getSession(db, 'Bearer ' + signup.token)).toBeNull();
+    expect(await settings.auth.me()).toMatchObject({ displayName: 'Alex' });
     await db.update(accounts).set({ fundedAt: new Date(), creditCents: 1000 }).where(eq(accounts.id, accountId!));
     await db.update(emailChallenges).set({ issuedAt: new Date(Date.now() - 61_000) }).where(eq(emailChallenges.id, first.challengeId));
     const reset = await beginVerification(db, email, requester, async (_email, value) => { code = value; return 'test'; }, undefined, 'reset');
