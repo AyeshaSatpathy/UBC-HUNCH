@@ -92,6 +92,22 @@ export function useCampus(id?: number) {
   });
 }
 
+export function useSettings() {
+  const { api, signedIn } = useSession();
+  return useQuery({ queryKey: ['settings'], enabled: signedIn,
+    queryFn: ({ signal }) => api.auth.settings.query(undefined, { signal }), retry: false,
+    refetchInterval: ({ state }) => state.data?.pendingCampusId ? 4_000 : false,
+  });
+}
+
+export function useDepositHistory() {
+  const { api, signedIn } = useSession();
+  return useQuery({ queryKey: ['deposits'], enabled: signedIn, retry: false,
+    queryFn: ({ signal }) => api.deposits.history.query(undefined, { signal }),
+    refetchInterval: ({ state }) => state.data?.deposits.some(deposit => deposit.status === 'pending') ? 2_500 : false,
+  });
+}
+
 export function usePortfolio() {
   const { api, signedIn } = useSession();
   return useQuery({
@@ -121,6 +137,14 @@ export function studentError(error: unknown, fallback: string) {
   if (error.data?.code === 'TOO_MANY_REQUESTS') return error.message.startsWith('Too many sign-in') ? 'Too many attempts. Try again in 15 minutes.' : 'Please wait a minute before requesting another code.';
   if (error.data?.code === 'UNAUTHORIZED') return 'Please sign in again.';
   const messages: Record<string, string> = {
+    'Use a school email that is not already linked to Hunch.': 'Use a school email that is not already linked to Hunch.',
+    'That email belongs to your current campus.': 'That email belongs to your current campus.',
+    'This campus change is unavailable for your account.': 'You can change campuses after account setup finishes. Reviewer accounts require administrator help.',
+    'Wait for your pending market action to finish.': 'Wait for your pending market action to finish, then verify again.',
+    'Campus change is in progress. Try again shortly.': 'Your campus is updating. Try again shortly.',
+    'You can add up to $25 in test funds every 24 hours.': 'You can add up to $25 in test funds every 24 hours.',
+    'A deposit is already processing. Check Portfolio for its status.': 'A deposit is already processing. Check Portfolio for its status.',
+    'This amount is unavailable. Choose a smaller deposit or try again later.': 'This amount is unavailable. Choose a smaller deposit or try again later.',
     'Complete Sign up first to create your password.': 'Use Sign up to create your password first.',
     'Complete sign up and choose a password to continue.': 'Use Sign up to create your password first.',
     'You already have an account. Use Log in or Reset password.': 'You already have an account. Use Log in or Reset password.',

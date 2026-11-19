@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import { type Action, type Position, isSettled, money, shares, statusLabel, studentError, useAction, usePortfolio, useSession } from '../../api';
+import { type Action, type Position, isSettled, money, shares, statusLabel, studentError, useAction, useDepositHistory, usePortfolio, useSession } from '../../api';
 import { Button, ErrorNotice, Loading, Note, Page, s } from '../../ui';
 
 function PendingAction({ item }: { item: Action }) {
@@ -65,20 +65,37 @@ function Claim({ position }: { position: Position }) {
 export default function Portfolio() {
   const { api } = useSession();
   const data = usePortfolio();
+  const activity = useDepositHistory();
+  const pendingDeposit = activity.data?.deposits.find(item => item.status === 'pending');
   const [refreshing, setRefreshing] = useState(false);
   const pending = useQuery({ queryKey: ['pending-actions'], queryFn: ({ signal }) => api.actions.pending.query(undefined, { signal }) });
   const positions = data.data?.positions.filter(item => item.paidCents !== '0' || item.yesSharesMillionths !== '0' || item.noSharesMillionths !== '0') ?? [];
-  return <Page tabbed refreshing={refreshing} onRefresh={() => { setRefreshing(true); void Promise.all([data.refetch(), pending.refetch()]).finally(() => setRefreshing(false)); }}>
+  return <Page tabbed refreshing={refreshing} onRefresh={() => { setRefreshing(true); void Promise.all([data.refetch(), pending.refetch(), activity.refetch()]).finally(() => setRefreshing(false)); }}>
     <Text accessibilityRole="header" style={s.heading}>Portfolio</Text>
     <View style={s.panel}>
       <Text style={s.muted}>Available balance</Text>
       {data.data?.balanceCents != null && <Text style={s.value} accessibilityLiveRegion="polite">{money(data.data.balanceCents)}</Text>}
       {data.data?.state === 'pending' && <Text style={s.muted}>Your account is being set up.</Text>}
+      {activity.data?.enabled && <Button label={pendingDeposit ? 'View pending deposit' : 'Add funds'}
+        onPress={() => router.push(pendingDeposit ? { pathname: '/deposit', params: { id: pendingDeposit.id } } : '/deposit')} />}
     </View>
     {data.isPending && <Loading>Loading your portfolio…</Loading>}
     {data.isError && <ErrorNotice retry={() => void data.refetch()}>Couldn’t load your portfolio.</ErrorNotice>}
     {pending.isError && <ErrorNotice retry={() => void pending.refetch()}>Couldn’t check pending activity.</ErrorNotice>}
     {pending.data?.map(item => <PendingAction key={item.id} item={item} />)}
+    {activity.isError && <ErrorNotice retry={() => void activity.refetch()}>Couldn’t load balance activity.</ErrorNotice>}
+    {activity.data && (activity.data.deposits.length > 0 || activity.data.purchases.length > 0) && <View style={s.panel}>
+      <Text style={s.label}>Balance activity</Text>
+      {activity.data.deposits.map(item => <View key={item.id} style={[s.row, s.between]}>
+        <View style={{ flex: 1 }}><Text style={s.body}>Deposit · {money(item.cents)}</Text><Text style={s.muted}>{new Date(item.createdAt).toLocaleDateString()}</Text></View>
+        <Button label={{ pending: 'Pending', confirmed: 'Complete', declined: 'Declined', failed: 'Failed' }[item.status]} tone="quiet"
+          onPress={() => router.push({ pathname: '/deposit', params: { id: item.id } })} />
+      </View>)}
+      {activity.data.purchases.map(item => <View key={item.id} style={[s.row, s.between]}>
+        <View style={{ flex: 1 }}><Text style={s.body}>Bought {item.side ? 'YES' : 'NO'}</Text><Text numberOfLines={2} style={s.muted}>{item.question}</Text></View>
+        <Text style={s.body}>−{money(item.paidCents)}</Text>
+      </View>)}
+    </View>}
     {([['Open positions', false], ['Settled activity', true]] as const).map(([label, settled]) => {
       const entries = positions.filter(({ market }) => isSettled(market) === settled);
       return <View key={label} style={{ gap: 12 }}>

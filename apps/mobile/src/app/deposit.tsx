@@ -1,0 +1,91 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { TRPCClientError } from '@trpc/client';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import { actionKey, money, studentError, useDepositHistory, usePortfolio, useSession } from '../api';
+import { Button, ErrorNotice, Icon, Loading, Page, c, s } from '../ui';
+
+const amounts = [500, 1000, 2500] as const;
+const cards = ['4242', '0002'] as const;
+
+export default function Deposit() {
+  const { api, signedIn, loading } = useSession();
+  const client = useQueryClient();
+  const { id: existing } = useLocalSearchParams<{ id?: string }>();
+  const history = useDepositHistory();
+  const portfolio = usePortfolio();
+  const [amount, setAmount] = useState<(typeof amounts)[number]>(1000);
+  const [card, setCard] = useState<(typeof cards)[number]>('4242');
+  const [requestKey] = useState(actionKey);
+  const confirm = useMutation({
+    mutationFn: () => api.deposits.confirm.mutate({ cents: amount, card, requestKey }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['deposits'] }),
+    onError: () => { void client.invalidateQueries({ queryKey: ['deposits'] }); },
+  });
+  const id = existing ?? confirm.data?.id;
+  const status = useQuery({ queryKey: ['deposit', id], enabled: signedIn && !!id, retry: false,
+    queryFn: ({ signal }) => api.deposits.status.query({ id: id! }, { signal }),
+    refetchInterval: ({ state }) => state.data?.status === 'pending' || !state.data ? 2500 : false,
+  });
+  const record = status.data ?? confirm.data;
+  const confirmed = record?.status === 'confirmed';
+  useEffect(() => {
+    if (!confirmed) return;
+    void client.invalidateQueries({ queryKey: ['deposits'] });
+    void client.invalidateQueries({ queryKey: ['portfolio'] });
+  }, [confirmed, client]);
+  if (loading) return <Page><Loading>Opening checkout…</Loading></Page>;
+  if (!signedIn) return <Redirect href="/onboarding" />;
+  const back = () => router.dismissTo('/portfolio');
+  const pending = history.data?.deposits.find(item => item.status === 'pending');
+  const rejected = confirm.error instanceof TRPCClientError && confirm.error.data?.code === 'BAD_REQUEST';
+  const locked = confirm.isPending || (confirm.isError && !rejected);
+  const canDeposit = history.data?.enabled && portfolio.data?.state === 'ready' && !pending;
+  return <Page>
+    <View style={s.row}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Back to Portfolio" style={s.iconButton} onPress={back}><Icon name="chevron-back" /></Pressable>
+      <Text accessibilityRole="header" style={s.heading}>{id ? 'Deposit details' : 'Add funds'}</Text>
+    </View>
+    {id ? <>
+      {record && <View style={[s.panel, { alignItems: 'center', paddingVertical: 24 }]}>
+        <Icon name={confirmed ? 'checkmark-circle' : record.status === 'pending' ? 'time-outline' : 'alert-circle-outline'}
+          size={44} color={confirmed || record.status === 'pending' ? c.lime : c.error} />
+        <Text style={s.value}>{money(record.cents)}</Text>
+        <Text accessibilityLiveRegion="polite" style={s.label}>{
+          { confirmed: 'Deposit complete', pending: 'Deposit processing', declined: 'Card declined', failed: 'Deposit failed' }[record.status]
+        }</Text>
+        <Text style={s.muted}>Test card •••• {record.card}</Text>
+        {confirmed && portfolio.isSuccess && portfolio.dataUpdatedAt >= status.dataUpdatedAt && portfolio.data.balanceCents != null && <Text style={s.body}>{money(portfolio.data.balanceCents)} available</Text>}
+        {record.status === 'pending' && <Text style={[s.muted, { textAlign: 'center' }]}>Your funds will appear when the deposit confirms. You can check its status in Portfolio.</Text>}
+        {(record.status === 'declined' || record.status === 'failed') && <Text style={s.muted}>No funds were added.</Text>}
+      </View>}
+      {status.isPending && !record && <Loading>Checking your deposit…</Loading>}
+      {status.isError && <ErrorNotice retry={() => void status.refetch()}>Could not check your deposit.</ErrorNotice>}
+      <Button label="View Portfolio" onPress={back} />
+    </> : <>
+      <View style={s.panel}>
+        <Text style={s.label}>Choose an amount</Text>
+        <View style={s.row}>{amounts.map(value => <Button key={value} grow label={money(value)} selected={amount === value}
+          disabled={locked || !!pending} tone={amount === value ? 'lime' : 'quiet'} onPress={() => { confirm.reset(); setAmount(value); }} />)}</View>
+      </View>
+      <View style={[s.panel, { backgroundColor: '#252032', paddingVertical: 18 }]}>
+        <View style={[s.row, s.between]}><Text style={s.label}>Payment method</Text><Icon name="card-outline" color={c.lilac} /></View>
+        {cards.map(value => <Pressable key={value} accessibilityRole="radio" accessibilityLabel={'Test card ending in ' + value}
+          accessibilityState={{ checked: card === value, disabled: locked || !!pending }} disabled={locked || !!pending} onPress={() => { confirm.reset(); setCard(value); }}
+          style={[s.row, { minHeight: 48 }]}>
+          <Icon name={card === value ? 'radio-button-on-outline' : 'radio-button-off-outline'} color={card === value ? c.lime : c.muted} />
+          <Text style={s.body}>Test card •••• {value}</Text>
+        </Pressable>)}
+      </View>
+      <View style={[s.row, s.between]}><Text style={s.label}>Total deposit</Text><Text style={s.label}>{money(amount)}</Text></View>
+      {history.isError && <ErrorNotice retry={() => void history.refetch()}>Could not check deposit availability.</ErrorNotice>}
+      {history.isSuccess && !history.data.enabled && <Text style={s.muted}>Deposits are unavailable.</Text>}
+      {history.data?.enabled && portfolio.data?.state === 'pending' && <Text style={s.muted}>Deposits will be available after your account is ready.</Text>}
+      {confirm.isError && !pending && <ErrorNotice>{studentError(confirm.error, 'Could not confirm your deposit. Try again or return to Portfolio to check its status.')}</ErrorNotice>}
+      {pending ? <Button label="View pending deposit" onPress={() => router.setParams({ id: pending.id })} /> :
+        <Button label={confirm.isPending ? 'Confirming…' : confirm.isError ? 'Retry deposit' : 'Confirm deposit'} disabled={confirm.isPending || !canDeposit} onPress={() => confirm.mutate()} />}
+      <Button label="Cancel" tone="quiet" disabled={confirm.isPending} onPress={back} />
+    </>}
+  </Page>;
+}

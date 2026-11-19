@@ -27,9 +27,9 @@ export const s = StyleSheet.create({
   error: { color: c.error, fontSize: 15, lineHeight: 21 },
 });
 
-export function Page({ children, tabbed = false, onRefresh, refreshing = false }: { children: ReactNode; tabbed?: boolean; onRefresh?: () => void; refreshing?: boolean }) {
+export function Page({ children, tabbed = false, fill = false, onRefresh, refreshing = false }: { children: ReactNode; tabbed?: boolean; fill?: boolean; onRefresh?: () => void; refreshing?: boolean }) {
   return <SafeAreaView edges={tabbed ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']} style={s.screen}>
-    <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}
+    <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={[s.content, fill && { flexGrow: 1 }]}
       refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.lime} colors={[c.lime]} /> : undefined}>
       {children}
     </ScrollView>

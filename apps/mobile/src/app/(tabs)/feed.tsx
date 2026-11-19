@@ -2,13 +2,15 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { isOpen, useAccount, useCampus, usePortfolio, useSavedMarkets, useSession } from '../../api';
+import { isOpen, useAccount, useCampus, usePortfolio, useSavedMarkets, useSession, useSettings } from '../../api';
 import { MarketCard } from '../../markets';
 import { Button, ErrorNotice, Icon, Loading, Note, Page, Wordmark, c, s } from '../../ui';
 
 export default function Feed() {
   const { api } = useSession();
   const account = useAccount();
+  const settings = useSettings();
+  const [showAlerts, setShowAlerts] = useState(false);
   const portfolio = usePortfolio();
   const campus = useCampus(account.data?.campusId);
   const [selected, select] = useState<'all' | null>(null);
@@ -30,11 +32,23 @@ export default function Feed() {
   const featured = markets.find(isOpen);
   const activity = useQuery({ queryKey: ['activity', campusId],
     queryFn: ({ signal }) => api.activity.query({ campusId }, { signal }), refetchInterval: 5_000 });
+  const alerts = useQuery({ queryKey: ['activity', account.data?.campusId],
+    queryFn: ({ signal }) => api.activity.query({ campusId: account.data?.campusId }, { signal }),
+    enabled: showAlerts && !!account.data?.campusId && !!settings.data?.notificationsEnabled, refetchInterval: 5_000 });
   return <Page tabbed refreshing={refreshing} onRefresh={() => { setRefreshing(true); void Promise.all([feed.refetch(), portfolio.refetch(), activity.refetch(), saved.refetch()]).finally(() => setRefreshing(false)); }}>
-    <View style={[s.row, s.between]}><Wordmark /><Pressable accessibilityRole="button" accessibilityLabel="Open your profile" onPress={() => router.navigate('/profile')}
+    <View style={s.row}><View style={{ flex: 1 }}><Wordmark /></View>
+      {settings.data?.notificationsEnabled && <Pressable accessibilityRole="button" accessibilityLabel="Campus notifications" accessibilityState={{ expanded: showAlerts }}
+        style={s.iconButton} onPress={() => setShowAlerts(value => !value)}><Icon name="notifications-outline" color={showAlerts ? c.lime : c.cream} /></Pressable>}
+      <Pressable accessibilityRole="button" accessibilityLabel="Open your profile" onPress={() => router.navigate('/profile')}
       style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.lilac, justifyContent: 'center', alignItems: 'center' }}>
       <Text style={[s.label, { color: c.bg }]}>{account.data?.displayName?.slice(0, 1).toUpperCase() || 'H'}</Text>
     </Pressable></View>
+    {showAlerts && settings.data?.notificationsEnabled && <View style={s.panel}>
+      <Text style={s.label}>Campus notifications</Text>
+      {alerts.isPending ? <Text style={s.muted}>Checking for updates…</Text> : alerts.isError ? <ErrorNotice retry={() => void alerts.refetch()}>Could not load notifications.</ErrorNotice> :
+        alerts.data.length === 0 ? <Text style={s.muted}>You’re caught up.</Text> : alerts.data.slice(0, 3).map(item => <Button key={item.id} label={item.question} tone="quiet"
+          onPress={() => router.push({ pathname: '/market/[id]', params: { id: item.marketId } })} />)}
+    </View>}
     <View style={{ gap: 4 }}>
       <Text style={[s.heading, { fontSize: 44, lineHeight: 49 }]}>{account.data?.displayName ? 'Hey, ' + account.data.displayName + '.' : 'Right here. On campus.'}</Text>
       <Text style={s.muted}>See what everyone is calling. Make a few calls of your own.</Text>

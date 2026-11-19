@@ -218,9 +218,11 @@ Money is represented as six-decimal integers in contract operations and integer-
 
 ## Account settings and payments
 
-Open **Profile → Settings** to view your verified school email and campus, edit your name, change an existing password with an email code, sign out other sessions, or restore the getting started guide.
+Open **Profile → Settings** to change your display name, turn in-app campus notifications on or off, verify a new campus, view About Hunch, or sign out. To change campus, verify an email from the new school. The login email changes after verification and campus eligibility updates once account registration confirms. The account and balance carry over. Password resets are available from Log in.
 
-Hunch currently uses test credits. After school email verification, the provisioning worker creates a Circle-managed account on Arc testnet, registers the campus, and sends the configured starting credit from the testnet treasury. A purchase uses that balance and includes a 1% fee. The backend submits the approval and purchase through Circle. After a market settles, a successful claim returns any payout or refund to the in-app balance.
+Hunch currently uses test funds. After school email verification, the provisioning worker creates a Circle-managed account on Arc testnet, registers the campus, and sends the configured starting credit from the testnet treasury. A purchase uses that balance and includes a 1% fee. The backend submits the approval and purchase through Circle. After a market settles, a successful claim returns any payout or refund to the in-app balance.
+
+Set `ENABLE_TEST_DEPOSITS=true` in `apps/api/.env`, restart the API, and run `bun run --cwd apps/api arc:provision-accounts --follow` with the existing testnet treasury funded. **Portfolio → Add funds** offers $5, $10 and $25. Test card `4242` queues a treasury transfer and `0002` produces a decline. Neither card accepts real card details. The daily account limit is $25 and only one deposit can process per account at a time. Portfolio shows pending deposits across reloads and updates the balance after the exact transfer confirms.
 
 Real deposits would need a payment provider approved for the product and jurisdiction. An integration would start with provider-hosted checkout. The backend would record a pending deposit and verify the provider's signed payment events before issuing one credit per confirmed deposit. The production design also needs reconciliation, chargeback and refund handling, and a separate cash withdrawal flow. The local testnet treasury only issues test credits.
 
