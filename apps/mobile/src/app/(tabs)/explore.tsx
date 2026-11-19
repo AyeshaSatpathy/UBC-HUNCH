@@ -24,10 +24,6 @@ export default function Explore() {
         !markets.data.pages[0].items.length ? <Note>No markets here yet. Check back soon.</Note> :
         markets.data.pages.flatMap(page => page.items).map(market => <MarketCard key={market.id} market={market} />)}
       {markets.hasNextPage && <Button label={markets.isFetchingNextPage ? 'Loading...' : 'Load more'} disabled={markets.isFetchingNextPage} tone="quiet" onPress={() => void markets.fetchNextPage()} />}
-    </> : <>
-      <Text style={s.body}>Explore the questions bringing campuses together.</Text>
-      <CampusSearch onSelect={setCampus} />
-      <Text style={s.muted}>Search for a school, city, or college abbreviation.</Text>
-    </>}
+    </> : <CampusSearch onSelect={setCampus} />}
   </Page>;
 }

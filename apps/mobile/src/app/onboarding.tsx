@@ -91,8 +91,14 @@ export default function Onboarding() {
       </> : <>
         <TextInput accessibilityLabel="Verification code" placeholder="000000" placeholderTextColor={c.muted} value={code} onChangeText={value => setCode(value.replace(/\D/g, ''))} maxLength={6} keyboardType="number-pad" autoComplete="one-time-code" style={[s.input, { fontSize: 28, letterSpacing: 8, textAlign: 'center' }]} />
         <Button label={verify.isPending ? 'Verifying...' : mode === 'signup' ? 'Verify and join Hunch' : 'Save password and log in'} disabled={busy || code.length !== 6} onPress={() => verify.mutate()} />
-        <View style={s.row}><Button label={cooldown ? 'Resend in ' + cooldown + 's' : 'Resend code'} grow tone="quiet" disabled={busy || cooldown > 0} onPress={() => request.mutate()} /><Button label="Edit details" grow tone="quiet" disabled={busy} onPress={() => { setChallenge(''); verify.reset(); request.reset(); }} /></View>
         <Text style={s.muted}>The code expires in 10 minutes. Check Spam if it has not arrived.</Text>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy || cooldown > 0 }}
+          disabled={busy || cooldown > 0} onPress={() => request.mutate()}
+          style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: c.lime }}>
+            {request.isPending ? 'Sending…' : cooldown ? 'Resend in ' + cooldown + 's' : 'Resend code'}
+          </Text>
+        </Pressable>
       </>}
       {!!issue && <ErrorNotice>{studentError(issue, 'Could not continue. Check your connection and try again.')}</ErrorNotice>}
     </View>
