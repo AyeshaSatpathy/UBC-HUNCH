@@ -15,6 +15,7 @@ export default function Onboarding() {
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState('');
   const [cooldown, setCooldown] = useState(0);
+  const [submitted, setSubmitted] = useState(false);
   useEffect(() => {
     if (!cooldown) return;
     const timer = setTimeout(() => setCooldown(value => Math.max(0, value - 1)), 1000);
@@ -37,8 +38,21 @@ export default function Onboarding() {
   if (loading) return <Page><Loading>Opening Hunch...</Loading></Page>;
   if (signedIn) return <Redirect href="/feed" />;
   const busy = request.isPending || login.isPending || verify.isPending;
-  const validEmail = /^[^\s@]+@[^\s@]+\.edu$/i.test(email.trim());
+  const nameError = mode === 'signup' && !name.trim() ? 'Enter your name or nickname.' : '';
+  const emailError = !/^[^\s@]+@[^\s@]+\.edu$/i.test(email.trim()) || email.trim().length > 254
+    ? 'Enter a valid school email ending in .edu.' : '';
+  const passwordError = mode === 'login'
+    ? (password.length === 0 ? 'Enter your password.' : '')
+    : (password.length < 12 ? 'Use at least 12 characters for your password.' : '');
+  const submit = () => {
+    setSubmitted(true);
+    if (nameError || emailError || passwordError) return;
+    if (mode === 'login') login.mutate();
+    else request.mutate();
+  };
   const reset = (next: typeof mode) => {
+    if (next === mode) return;
+    setSubmitted(false);
     setMode(next); setPassword(''); setCode(''); setChallenge(''); request.reset(); login.reset(); verify.reset();
   };
   const issue = verify.error ?? login.error ?? request.error;
@@ -60,13 +74,19 @@ export default function Onboarding() {
       <Text accessibilityRole="header" style={[s.heading, { fontSize: 26 }]}>{challenge ? 'One quick check' : mode === 'login' ? 'Good to have you back.' : mode === 'recover' ? 'A fresh start.' : 'Make yourself at home.'}</Text>
       <Text style={s.muted}>{challenge ? 'Enter the 6-digit code sent to ' + email + '. Your password will be saved once you verify.' : mode === 'login' ? 'Your campus, your picks, right where you left them.' : mode === 'recover' ? 'Verify your school email to reset your existing password.' : 'Choose a name and password. We will verify your school email next.'}</Text>
       {!challenge ? <>
-        {mode === 'signup' && <View style={s.field}><Text style={s.muted}>What should we call you?</Text><TextInput accessibilityLabel="Your name" value={name} onChangeText={setName} maxLength={40} placeholder="First name or nickname" placeholderTextColor={c.muted} style={s.input} autoComplete="given-name" /></View>}
-        <View style={s.field}><Text style={s.muted}>School email</Text><TextInput accessibilityLabel="School email" value={email} onChangeText={setEmail} placeholder="you@school.edu" placeholderTextColor={c.muted} style={s.input} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" /></View>
+        {mode === 'signup' && <View style={s.field}><Text style={s.muted}>What should we call you?</Text><TextInput accessibilityLabel="Your name" value={name} onChangeText={setName} maxLength={40} placeholder="First name or nickname" placeholderTextColor={c.muted} style={s.input} autoComplete="given-name" />
+          {submitted && !!nameError && <Text accessibilityRole="alert" style={s.error}>{nameError}</Text>}
+        </View>}
+        <View style={s.field}><Text style={s.muted}>School email</Text><TextInput accessibilityLabel="School email" value={email} onChangeText={setEmail} placeholder="you@school.edu" placeholderTextColor={c.muted} style={s.input} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" />
+          {submitted && !!emailError && <Text accessibilityRole="alert" style={s.error}>{emailError}</Text>}
+        </View>
         <View style={s.field}><Text style={s.muted}>{mode === 'login' ? 'Password' : 'Choose a password'}</Text>
           <View style={{ position: 'relative' }}><TextInput accessibilityLabel="Password" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder={mode === 'login' ? 'Your password' : 'At least 12 characters'} placeholderTextColor={c.muted} maxLength={128} style={[s.input, { width: '100%', paddingRight: 56 }]} />
             <Pressable accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} style={[s.iconButton, { position: 'absolute', right: 2, top: 2 }]} onPress={() => setShowPassword(!showPassword)}><Icon name={showPassword ? 'eye-off-outline' : 'eye-outline'} /></Pressable></View>
+          {submitted && !!passwordError ? <Text accessibilityRole="alert" style={s.error}>{passwordError}</Text> :
+            mode !== 'login' && <Text style={s.muted}>At least 12 characters.</Text>}
         </View>
-        <Button label={busy ? 'Just a moment...' : mode === 'login' ? 'Log in' : 'Send verification code'} disabled={busy || !validEmail || password.length < (mode === 'login' ? 1 : 12) || (mode === 'signup' && !name.trim())} onPress={() => mode === 'login' ? login.mutate() : request.mutate()} />
+        <Button label={request.isPending ? 'Sending code...' : login.isPending ? 'Logging in...' : mode === 'login' ? 'Log in' : 'Send verification code'} disabled={busy} onPress={submit} />
         {mode === 'login' && <Pressable accessibilityRole="button" disabled={busy} onPress={() => reset('recover')} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-end' }}><Text style={[s.muted, { fontSize: 13, textDecorationLine: 'underline' }]}>Reset password</Text></Pressable>}
       </> : <>
         <TextInput accessibilityLabel="Verification code" placeholder="000000" placeholderTextColor={c.muted} value={code} onChangeText={value => setCode(value.replace(/\D/g, ''))} maxLength={6} keyboardType="number-pad" autoComplete="one-time-code" style={[s.input, { fontSize: 28, letterSpacing: 8, textAlign: 'center' }]} />
