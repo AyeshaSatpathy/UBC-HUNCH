@@ -28,6 +28,7 @@ export const accounts = pgTable("accounts", {
   verifiedAt: date("verified_at").notNull(),
   displayName: text("display_name"),
   passwordHash: text("password_hash"),
+  hasSeenGuide: boolean("has_seen_guide").notNull().default(false),
   isReviewer: boolean("is_reviewer").notNull().default(false),
   wallet: text("wallet").unique(),
   circleWalletId: text("circle_wallet_id").unique(),
@@ -55,6 +56,7 @@ export const emailChallenges = pgTable("email_challenges", {
   requester: text("requester").notNull(),
   unitid: integer("unitid").notNull().references(() => campuses.unitid),
   codeHash: text("code_hash").notNull(),
+  intent: text("intent").notNull().default("legacy"),
   attempts: integer("attempts").notNull().default(0),
   issuedAt: date("issued_at").notNull(),
   expiresAt: date("expires_at").notNull(),
@@ -70,6 +72,12 @@ export const sessions = pgTable("sessions", {
   accountId: uuid("account_id").notNull().references(() => accounts.id),
   expiresAt: date("expires_at").notNull(),
 });
+
+export const savedMarkets = pgTable("saved_markets", {
+  accountId: uuid("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
+  marketId: numeric("market_id", { precision: 78, scale: 0 }).notNull(),
+  createdAt: date("created_at").notNull().defaultNow(),
+}, table => [primaryKey({ columns: [table.accountId, table.marketId] })]);
 
 export const claimRequests = pgTable("claim_requests", {
   id: uuid("id").primaryKey().defaultRandom(),

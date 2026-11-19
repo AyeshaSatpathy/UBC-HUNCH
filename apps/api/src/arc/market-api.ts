@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { BaseError, ContractFunctionRevertedError, type Address } from "viem";
 import type { Database } from "../db";
-import { accounts, arcMarkets, arcPositions, campuses } from "../schema";
+import { accounts, arcMarkets, arcPositions, campuses, savedMarkets } from "../schema";
 import { chainId, collateralAbi, createArcClient, market, marketAbi, usdc } from "./contract";
 
 const deployment = and(eq(arcMarkets.chainId, chainId), eq(arcMarkets.contract, market));
@@ -41,6 +41,12 @@ export async function getMarket(db: Database, id: string, viewer?: string | null
   const [row] = await indexedMarkets(db).where(and(deployment, eq(arcMarkets.marketId, id))).limit(1);
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Market unavailable" });
   return { ...marketFields(row.market, row.campus), canParticipate: !!viewer && viewer.toLowerCase() !== row.market.reviewer };
+}
+
+export async function listSavedMarkets(db: Database, accountId: string) {
+  const rows = await indexedMarkets(db).innerJoin(savedMarkets, eq(savedMarkets.marketId, arcMarkets.marketId))
+    .where(and(deployment, eq(savedMarkets.accountId, accountId))).orderBy(desc(savedMarkets.createdAt));
+  return rows.map(({ market, campus }) => marketFields(market, campus));
 }
 
 export async function quoteMarket(id: string, side: "YES" | "NO", cents: number) {

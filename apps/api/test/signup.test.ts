@@ -43,33 +43,35 @@ test("school code verification is single-use, rate limited, and reuses the same 
     expect(saved.codeHash).toMatch(/^[a-f0-9]{64}$/);
     expect(saved.codeHash).not.toBe(code);
     await expect(issue()).rejects.toThrow("Please wait");
-    const firstToken = await api.auth.verifyCode.mutate({ challengeId: first.challengeId, code });
+    const firstToken = await api.auth.verifyCode.mutate({ profile: { password: "test-signup-password-123" }, challengeId: first.challengeId, code });
     token = firstToken.token;
-    expect(await api.auth.me.query()).toEqual({ campusId: 228778, displayName: null, state: "pending" });
+    expect(await api.auth.me.query()).toEqual({ campusId: 228778, displayName: null, hasSeenGuide: false, state: "pending" });
     expect(await api.portfolio.get.query()).toEqual({ state: "pending", balanceCents: null, positions: [] });
-    await expect(api.auth.verifyCode.mutate({ challengeId: first.challengeId, code })).rejects.toThrow("invalid or expired");
+    await expect(api.auth.verifyCode.mutate({ profile: { password: "test-signup-password-123" }, challengeId: first.challengeId, code })).rejects.toThrow("invalid or expired");
 
     await ignoreCooldown(first.challengeId);
     const second = await issue();
     const outcomes = await Promise.allSettled([
-      api.auth.verifyCode.mutate({ challengeId: second.challengeId, code }),
-      api.auth.verifyCode.mutate({ challengeId: second.challengeId, code }),
+      api.auth.verifyCode.mutate({ profile: { password: "test-signup-password-123" }, challengeId: second.challengeId, code }),
+      api.auth.verifyCode.mutate({ profile: { password: "test-signup-password-123" }, challengeId: second.challengeId, code }),
     ]);
     expect(outcomes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const completed = outcomes.find(result => result.status === 'fulfilled');
+    if (completed?.status === 'fulfilled') token = completed.value.token;
     expect(await db.select().from(accounts).where(eq(accounts.email, email))).toHaveLength(1);
 
     await ignoreCooldown(second.challengeId);
     const third = await issue();
     const wrongCode = code === "000000" ? "111111" : "000000";
     for (let tries = 0; tries < 5; tries++) {
-      await expect(api.auth.verifyCode.mutate({ challengeId: third.challengeId, code: wrongCode })).rejects.toThrow("invalid or expired");
+      await expect(api.auth.verifyCode.mutate({ profile: { password: "test-signup-password-123" }, challengeId: third.challengeId, code: wrongCode })).rejects.toThrow("invalid or expired");
     }
-    await expect(api.auth.verifyCode.mutate({ challengeId: third.challengeId, code })).rejects.toThrow("invalid or expired");
+    await expect(api.auth.verifyCode.mutate({ profile: { password: "test-signup-password-123" }, challengeId: third.challengeId, code })).rejects.toThrow("invalid or expired");
 
     await ignoreCooldown(third.challengeId);
     const fourth = await issue();
     await db.update(emailChallenges).set({ expiresAt: new Date(0) }).where(eq(emailChallenges.id, fourth.challengeId));
-    await expect(api.auth.verifyCode.mutate({ challengeId: fourth.challengeId, code })).rejects.toThrow("invalid or expired");
+    await expect(api.auth.verifyCode.mutate({ profile: { password: "test-signup-password-123" }, challengeId: fourth.challengeId, code })).rejects.toThrow("invalid or expired");
     const now = Math.floor(Date.now() / 1000);
     const draft = { requestKey: randomUUID(), question: "Will the library reopen?", source: "Library announcement",
       yesRule: "Library reopens", noRule: "Library remains closed", close: now + 60, deadline: now + 120 };

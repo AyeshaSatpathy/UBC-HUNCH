@@ -13,8 +13,12 @@ test('verified password signup, returning login, reset and throttling preserve t
   let code = '';
   let accountId: string | undefined;
   try {
-    const first = await beginVerification(db, email, requester, async (_email, value) => { code = value; return 'test'; });
+    const first = await beginVerification(db, email, requester, async (_email, value) => { code = value; return 'test'; }, undefined, 'signup');
     await expect(passwordLogin(db, email, password, requester)).rejects.toThrow('Email or password');
+    await expect(finishVerification(db, first.challengeId, code)).rejects.toThrow('Complete sign up');
+    await db.update(emailChallenges).set({ intent: 'reset' }).where(eq(emailChallenges.id, first.challengeId));
+    await expect(finishVerification(db, first.challengeId, code, { password })).rejects.toThrow('Complete Sign up first');
+    await db.update(emailChallenges).set({ intent: 'signup' }).where(eq(emailChallenges.id, first.challengeId));
     const signup = await finishVerification(db, first.challengeId, code, { password, displayName: 'Alex' });
     const signed = await getSession(db, 'Bearer ' + signup.token);
     accountId = signed!.account.id;
@@ -26,7 +30,10 @@ test('verified password signup, returning login, reset and throttling preserve t
     expect((await getSession(db, 'Bearer ' + login.token))!.account.id).toBe(accountId);
     await db.update(accounts).set({ fundedAt: new Date(), creditCents: 1000 }).where(eq(accounts.id, accountId!));
     await db.update(emailChallenges).set({ issuedAt: new Date(Date.now() - 61_000) }).where(eq(emailChallenges.id, first.challengeId));
-    const reset = await beginVerification(db, email, requester, async (_email, value) => { code = value; return 'test'; });
+    const reset = await beginVerification(db, email, requester, async (_email, value) => { code = value; return 'test'; }, undefined, 'reset');
+    await db.update(emailChallenges).set({ intent: 'signup' }).where(eq(emailChallenges.id, reset.challengeId));
+    await expect(finishVerification(db, reset.challengeId, code, { password })).rejects.toThrow('already have an account');
+    await db.update(emailChallenges).set({ intent: 'reset' }).where(eq(emailChallenges.id, reset.challengeId));
     await finishVerification(db, reset.challengeId, code, { password: 'new-hunch-password-456' });
     expect(await getSession(db, 'Bearer ' + login.token)).toBeNull();
     await expect(passwordLogin(db, email, password, requester)).rejects.toThrow('Email or password');

@@ -71,6 +71,13 @@
       "when": 1795107023095,
       "tag": "0009_flowery_inhumans",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795108391470,
+      "tag": "0010_perfect_wraith",
+      "breakpoints": true
     }
   ]
 }

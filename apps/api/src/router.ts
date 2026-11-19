@@ -1,10 +1,10 @@
 import { initTRPC, TRPCError } from "@trpc/server";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "./db";
-import { accounts, campuses, sessions } from "./schema";
+import { accounts, campuses, savedMarkets, sessions } from "./schema";
 import { beginVerification, finishVerification, getSession, passwordLogin, schoolEmail } from "./auth/accounts";
-import { getMarket, listMarkets, portfolio, previewClaim, quoteMarket } from "./arc/market-api";
+import { getMarket, listMarkets, listSavedMarkets, portfolio, previewClaim, quoteMarket } from "./arc/market-api";
 import { claimStatus, submitClaim } from "./arc/claims";
 import { advanceStudentOperation, pendingStudentOperations, startStudentOperation } from "./arc/student-operations";
 import { activity, leaderboard } from "./activity";
@@ -40,13 +40,17 @@ export const appRouter = t.router({
   leaderboard: t.procedure.input(z.object({ campusId: campusId.optional() }))
     .query(({ ctx, input }) => leaderboard(ctx.db, input.campusId)),
   auth: t.router({
+    dismissGuide: signedIn.mutation(async ({ ctx }) => {
+      await ctx.db.update(accounts).set({ hasSeenGuide: true }).where(eq(accounts.id, ctx.session.account.id));
+      return { dismissed: true };
+    }),
     updateName: signedIn.input(z.object({ displayName: z.string().trim().min(1).max(40) }))
       .mutation(async ({ ctx, input }) => {
         await ctx.db.update(accounts).set(input).where(eq(accounts.id, ctx.session.account.id));
         return { displayName: input.displayName };
       }),
-    requestCode: t.procedure.input(z.object({ email: schoolEmail, campusId: campusId.optional() }))
-      .mutation(({ ctx, input }) => beginVerification(ctx.db, input.email, ctx.requester, undefined, input.campusId)),
+    requestCode: t.procedure.input(z.object({ email: schoolEmail, campusId: campusId.optional(), intent: z.enum(['signup', 'reset']).default('signup') }))
+      .mutation(({ ctx, input }) => beginVerification(ctx.db, input.email, ctx.requester, undefined, input.campusId, input.intent)),
     login: t.procedure.input(z.object({ email: schoolEmail, password: z.string().min(1).max(128) }))
       .mutation(({ ctx, input }) => passwordLogin(ctx.db, input.email, input.password, ctx.requester)),
     verifyCode: t.procedure.input(z.object({ challengeId: z.uuid(), code: z.string().regex(/^\d{6}$/),
@@ -56,6 +60,7 @@ export const appRouter = t.router({
     me: signedIn.query(({ ctx }) => ({
       campusId: ctx.session.account.unitid,
       displayName: ctx.session.account.displayName,
+      hasSeenGuide: ctx.session.account.hasSeenGuide,
       state: ctx.session.account.fundedAt ? "ready" as const : "pending" as const,
     })),
     signOut: signedIn.mutation(async ({ ctx }) => {
@@ -64,6 +69,13 @@ export const appRouter = t.router({
     }),
   }),
   markets: t.router({
+    saved: signedIn.query(({ ctx }) => listSavedMarkets(ctx.db, ctx.session.account.id)),
+    save: signedIn.input(marketInput.extend({ saved: z.boolean() })).mutation(async ({ ctx, input }) => {
+      await getMarket(ctx.db, input.marketId);
+      if (input.saved) await ctx.db.insert(savedMarkets).values({ accountId: ctx.session.account.id, marketId: input.marketId }).onConflictDoNothing();
+      else await ctx.db.delete(savedMarkets).where(and(eq(savedMarkets.accountId, ctx.session.account.id), eq(savedMarkets.marketId, input.marketId)));
+      return { saved: input.saved };
+    }),
     list: t.procedure.input(z.object({
       campusId: campusId.optional(), before: marketId.optional(), limit: z.number().int().min(1).max(50).default(20),
     })).query(({ ctx, input }) => listMarkets(ctx.db, input)),

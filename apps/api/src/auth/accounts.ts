@@ -23,7 +23,7 @@ function codeDigest(id: string, code: string) {
   return createHmac("sha256", Buffer.from(secret, "hex")).update(id).update(":").update(code).digest("hex");
 }
 
-export async function beginVerification(db: Database, email: string, requester: string, mail = sendCode, campusId?: number) {
+export async function beginVerification(db: Database, email: string, requester: string, mail = sendCode, campusId?: number, intent: 'signup' | 'reset' | 'legacy' = 'legacy') {
   const id = randomUUID();
   const code = String(randomInt(1_000_000)).padStart(6, "0");
   const codeHash = codeDigest(id, code);
@@ -54,7 +54,7 @@ export async function beginVerification(db: Database, email: string, requester: 
     await tx.update(emailChallenges).set({ consumedAt: now }).where(
       and(eq(emailChallenges.email, email), isNull(emailChallenges.consumedAt)),
     );
-    await tx.insert(emailChallenges).values({ id, email, requester, unitid: campus.unitid, codeHash,
+    await tx.insert(emailChallenges).values({ id, email, requester, unitid: campus.unitid, codeHash, intent,
       issuedAt: now, expiresAt: new Date(now.getTime() + lifetime) });
   });
   try {
@@ -78,6 +78,9 @@ export async function finishVerification(db: Database, id: string, code: string,
       return;
     }
     const [existing] = await tx.select().from(accounts).where(eq(accounts.email, challenge.email));
+    if (!profile && !existing?.isReviewer) throw new TRPCError({ code: "BAD_REQUEST", message: "Complete sign up and choose a password to continue." });
+    if (profile && challenge.intent === 'reset' && !existing?.passwordHash) throw new TRPCError({ code: "BAD_REQUEST", message: "Complete Sign up first to create your password." });
+    if (profile && challenge.intent === 'signup' && existing?.passwordHash) throw new TRPCError({ code: "BAD_REQUEST", message: "You already have an account. Use Log in or Reset password." });
     const [mapped] = await tx.select().from(campusEmailDomains)
       .where(eq(campusEmailDomains.domain, challenge.email.split("@").at(-1)!));
     const campus = existing ?? mapped;
