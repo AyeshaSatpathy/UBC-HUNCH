@@ -385,16 +385,3 @@ Preserve PostgreSQL data across restarts. Sessions, provisioning progress, opera
 ## Contract documentation
 
 See [contract setup and deployment](packages/contracts/README.md) for deployment settings, accounting rules, reviewer assignment and manual market funding.
-
-### Market illustrations
-
-The generic campus illustrations in `apps/mobile/assets/markets/` were generated with the built-in imagegen tool. They depict fictional campus scenes. Local assets reserve their layout space and show category placeholders while loading or if loading fails.
-
-The common generation prompt was "Create a wide landscape editorial illustration for Hunch, a premium college app" followed by each scene below, then "Sophisticated hand-painted gouache with subtle grain, charcoal shadows, warm cream light, lavender and muted lime accents. Rich depth, cinematic composition, restrained color, welcoming. No text, no lettering, no logos, no vehicles, no cryptocurrency imagery. Wide 3:2 composition. This is a generic fictional campus scene, not a real school."
-
-| File | Scene prompt |
-| --- | --- |
-| `campus.png` | A leafy university quad at dusk, warm windows and students walking, collegiate brick arches |
-| `sports.png` | An outdoor campus basketball court at golden hour, basketball in foreground and hoop |
-| `weather.png` | A university courtyard in gentle rain, lavender clouds, warm lights reflected on pavement |
-| `academics.png` | A cozy university library desk with open books, study lamp and arched windows |

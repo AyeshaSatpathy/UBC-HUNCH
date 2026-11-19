@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pressable, Text, View } from 'react-native';
 import { type Market, isOpen, money, statusLabel, useSavedMarkets, useSession } from './api';
 import { Button, ErrorNotice, Icon, c, s } from './ui';
-import { MarketArt } from './market-art';
 
 export function BuyButtons({ market }: { market: Market }) {
   return <View style={s.row}>{(['YES', 'NO'] as const).map(side =>
@@ -28,7 +27,6 @@ export function MarketCard({ market, featured = false, canBuy = false }: { marke
     </View>
     <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/market/[id]', params: { id: market.id } })}
       style={({ pressed }) => ({ minHeight: 44, gap: 12, opacity: pressed ? 0.78 : 1 })}>
-      <MarketArt question={market.question} height={featured ? 150 : 88} />
       <View style={[s.row, s.between]}>
         <Text style={[featured ? s.heading : s.label, { flex: 1 }]}>{market.question}</Text>
         {!featured && <Icon name="chevron-forward" color={c.muted} />}
