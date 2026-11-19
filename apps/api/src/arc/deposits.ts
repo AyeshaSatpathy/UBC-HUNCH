@@ -40,7 +40,7 @@ export async function submitDeposit(db: Database, account: typeof accounts.$infe
       const [recent] = await tx.select({ cents: sql<number>`coalesce(sum(${deposits.cents}), 0)::int` }).from(deposits).where(and(
         owned, eq(deposits.status, 'confirmed'), gte(deposits.createdAt, new Date(Date.now() - 86_400_000)),
       ));
-      if (recent.cents + input.cents > 2500) throw new TRPCError({ code: 'BAD_REQUEST', message: 'You can add up to $25 in test funds every 24 hours.' });
+      if (recent.cents + input.cents > 2500) throw new TRPCError({ code: 'BAD_REQUEST', message: 'You can add up to $25 every 24 hours.' });
       if (await available() < centsToUnits(input.cents)) throw new TRPCError({ code: 'BAD_REQUEST', message: 'This amount is unavailable. Choose a smaller deposit or try again later.' });
     }
     const [created] = await tx.insert(deposits).values({ ...input, accountId: account.id, status: input.card === '0002' ? 'declined' : 'pending' }).returning();

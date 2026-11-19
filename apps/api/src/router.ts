@@ -112,7 +112,7 @@ export const appRouter = t.router({
     }),
     history: signedIn.query(({ ctx }) => depositHistory(ctx.db, ctx.session.account)),
     status: signedIn.input(z.object({ id: z.uuid() })).query(({ ctx, input }) => depositStatus(ctx.db, ctx.session.account.id, input.id)),
-    confirm: signedIn.input(z.object({ requestKey, cents: z.union([z.literal(500), z.literal(1000), z.literal(2500)]), card: z.enum(['4242', '1111', '0002']) }))
+    confirm: signedIn.input(z.object({ requestKey, cents: z.number().int().min(100).max(2500), card: z.enum(['4242', '1111', '0002']) }))
       .mutation(({ ctx, input }) => submitDeposit(ctx.db, ctx.session.account, input)),
   }),
   markets: t.router({
