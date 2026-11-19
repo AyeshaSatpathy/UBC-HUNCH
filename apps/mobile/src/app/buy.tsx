@@ -73,9 +73,10 @@ export default function Buy() {
       </View>
     </View>
     <View style={[s.row, s.between]}><Text style={s.muted}>Estimated shares</Text><Text style={s.body}>{estimate ? shares(estimate.sharesMillionths) : '—'}</Text></View>
-    <View style={[s.row, s.between]}><Text style={s.body}>Trading fee</Text><Text style={s.body}>{estimate ? money(estimate.feeCents) : '—'}</Text></View>
+    <View style={[s.row, s.between]}><Text style={s.body}>Trading fee (1%)</Text><Text style={s.body}>{estimate ? money(estimate.feeCents) : '—'}</Text></View>
     <View style={s.divider} />
     <View style={[s.row, s.between]}><Text style={s.label}>Total</Text><Text style={s.label}>{estimate ? money(estimate.totalCents) : '—'}</Text></View>
+    <Text style={s.muted}>If your choice wins, each share pays $1. If it loses, it pays $0.</Text>
     {available != null && <Text style={s.muted}>{money(available)} available</Text>}
     {waiting && !active && <Loading>Checking your balance and market…</Loading>}
     {!waiting && !issue && quote.isFetching && !estimate && <Loading>Loading your quote…</Loading>}

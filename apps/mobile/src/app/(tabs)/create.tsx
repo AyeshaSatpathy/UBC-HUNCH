@@ -72,7 +72,7 @@ export default function Create() {
   return <Page tabbed>
     {campus.data && <Text style={s.muted}>{campus.data.name}</Text>}
     <Text accessibilityRole="header" style={s.heading}>{review ? 'Review market' : 'Create a market'}</Text>
-    <Text style={s.body}>{review ? 'An approved reviewer must be assigned and the market funded before trading opens.' : 'Ask a campus question with a clear YES or NO outcome.'}</Text>
+    <Text style={s.body}>{review ? 'Once a reviewer is assigned and the starting funds are ready, your market opens for everyone at your school.' : 'Ask a campus question with a clear YES or NO outcome.'}</Text>
     {account.isPending && <Loading>Checking your account…</Loading>}
     {account.isError && <ErrorNotice retry={() => void account.refetch()}>Couldn’t load your account.</ErrorNotice>}
     {account.data?.state === 'pending' && <Note>You can draft a market while your account is being set up.</Note>}
@@ -81,9 +81,8 @@ export default function Create() {
       setForm(previous => ({ ...previous, question: item.question, source: item.source, yesRule: item.yesRule, noRule: item.noRule }));
     }} />}
     {gemini && <View style={s.panel}>
-      <Text style={s.label}>Linked Gemini contract</Text>
-      <Text selectable style={s.body}>{gemini.eventTicker} / {gemini.ticker}</Text>
-      <Text selectable style={s.muted}>{gemini.contractId}</Text>
+      <Text style={s.label}>Linked Gemini event</Text>
+      <Text style={s.body}>{gemini.question}</Text>
       <Text style={s.muted}>The question and rules must match Gemini. Close trading by {dateLabel(String(gemini.expiry))} and set a later evidence deadline.</Text>
       {!review && <Button label="Unlink Gemini" tone="quiet" onPress={() => setGemini(undefined)} />}
     </View>}

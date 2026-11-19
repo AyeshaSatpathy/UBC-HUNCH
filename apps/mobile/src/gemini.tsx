@@ -14,7 +14,7 @@ export function GeminiSearch({ onSelect }: { onSelect: (item: GeminiChoice) => v
     queryFn: ({ signal }) => api.gemini.search.query({ query }, { signal }), retry: false });
   return <View style={s.panel}>
     <Text style={s.label}>Link a Gemini market</Text>
-    <Text style={s.muted}>Choose a contract to use its published question and rules.</Text>
+    <Text style={s.muted}>Optional. Choose an event to use Gemini’s published question and rules.</Text>
     <TextInput accessibilityLabel="Search Gemini markets" placeholder="Search events" placeholderTextColor={c.muted}
       style={s.input} value={input} onChangeText={setInput} maxLength={120} />
     <Button label="Search Gemini" disabled={input.trim().length < 2 || result.isFetching}
@@ -38,7 +38,6 @@ export function GeminiOdds({ marketId, crowd }: { marketId: string; crowd: numbe
   return <View style={s.panel}>
     <Text style={s.label}>Gemini and campus odds</Text>
     <Text style={s.body}>Campus YES {crowd}% Â· Gemini YES {data.yesPercent == null ? 'unavailable' : data.yesPercent + '%'}</Text>
-    <Text style={s.muted}>{data.ticker}</Text>
     {data.outcome && <Text style={s.body}>Gemini settled {data.outcome}</Text>}
     <Text style={s.label}>Gemini odds over time</Text>
     {points.length < 2 ? <Note>History is building as Gemini prices arrive.</Note> : <>

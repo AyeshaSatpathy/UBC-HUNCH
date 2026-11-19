@@ -48,6 +48,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const error = event.query.state.error;
     if (error instanceof TRPCClientError && error.data?.code === 'UNAUTHORIZED') void setSession(null);
   }), [queryClient, setSession]);
+  useEffect(() => queryClient.getMutationCache().subscribe((event) => {
+    if (event.type !== 'updated') return;
+    const error = event.mutation.state.error;
+    if (error instanceof TRPCClientError && error.data?.code === 'UNAUTHORIZED') void setSession(null);
+  }), [queryClient, setSession]);
   return <Context.Provider value={{
     api, loading: token === undefined, signedIn: !!token, setSession,
   }}>{children}</Context.Provider>;
@@ -105,6 +110,9 @@ export function studentError(error: unknown, fallback: string) {
   const messages: Record<string, string> = {
     'This school email domain is not supported': 'This school email domain is not supported.',
     'This email does not match the selected campus.': 'This email does not match the selected campus.',
+    'The code could not be sent. Please retry later': 'Email is temporarily unavailable. Please try again shortly.',
+    'Email verification is unavailable': 'Email sign-in is temporarily unavailable. Please try again shortly.',
+    'Your account is still being set up.': 'We’re getting your account ready. You can keep browsing while you wait.',
     'The code is invalid or expired': 'The code is invalid or expired.',
     'The price changed. Review the new quote before confirming.': 'The price changed. Review the new quote before confirming.',
     'Insufficient balance.': 'Insufficient balance.',

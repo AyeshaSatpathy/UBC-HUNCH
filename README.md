@@ -307,9 +307,11 @@ Automatic funding then opens eligible drafts. The last verified vault balance wa
 
 ## Verification status
 
+The November 19 audit removed the unused public notes-write endpoint, capped API request bodies, expanded malformed-webhook checks, and added session expiry handling for failed actions. The student UI explains purchase fees and payouts and hides internal linked-event identifiers.
+
 Run `bun run typecheck`, `bun run test`, and `bun run --cwd apps/mobile lint`. API tests require the migrated and seeded local database. `/health` checks the process, `/ready` checks Postgres, and `GET /webhooks/quicknode` reports whether Stream verification is configured.
 
-- The cleanup verification passed eight API tests with 75 assertions, all 16 Foundry contract tests (including 256 fuzz runs), both workspace typechecks, and Expo lint. The production web export passed during the preceding UI verification.
+- The cleanup verification passed eight API tests with 79 assertions, all 16 Foundry contract tests (including 256 fuzz runs), both workspace typechecks, and Expo lint. The production web export passed during the preceding UI verification.
 - Browser walkthrough used isolated responses for email login, session restore, logout, purchase response recovery, claim collection, publishing, and Gemini linking with locked terms. It submitted no live purchase.
 - Gemini's real settled response was fetched and accepted by the adapter. Pure settlement tests reject changed IDs, tickers, rules, pending and invalid statuses, and absent explicit outcomes.
 - Stream receiver tests verify HMAC rejection and duplicate delivery handling. The hosted Arc Logs filter returned the historical vault-deposit event correctly. Real signed QuickNode deliveries reached the Postgres inbox, and public requests with missing or incorrect signatures returned HTTP 401.
