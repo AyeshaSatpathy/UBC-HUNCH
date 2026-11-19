@@ -142,7 +142,7 @@ export function studentError(error: unknown, fallback: string) {
     'This campus change is unavailable for your account.': 'You can change campuses after account setup finishes. Reviewer accounts require administrator help.',
     'Wait for your pending market action to finish.': 'Wait for your pending market action to finish, then verify again.',
     'Campus change is in progress. Try again shortly.': 'Your campus is updating. Try again shortly.',
-    'You can add up to $25 in test funds every 24 hours.': 'You can add up to $25 in test funds every 24 hours.',
+    'You can add up to $25 every 24 hours.': 'You can add up to $25 every 24 hours.',
     'A deposit is already processing. Check Portfolio for its status.': 'A deposit is already processing. Check Portfolio for its status.',
     'This amount is unavailable. Choose a smaller deposit or try again later.': 'This amount is unavailable. Choose a smaller deposit or try again later.',
     'Complete Sign up first to create your password.': 'Use Sign up to create your password first.',
