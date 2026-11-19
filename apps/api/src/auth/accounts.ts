@@ -131,7 +131,7 @@ export async function confirmCampusChange(db: Database, accountId: string, id: s
     const [mapped] = await tx.select().from(campusEmailDomains).where(eq(campusEmailDomains.domain, challenge.email.split('@').at(-1)!));
     if (mapped?.unitid !== challenge.unitid) return false;
     await tx.update(emailChallenges).set({ consumedAt: now }).where(eq(emailChallenges.id, id));
-    await tx.update(accounts).set({ email: challenge.email, pendingCampusId: challenge.unitid, registrationTx: null }).where(eq(accounts.id, accountId));
+    await tx.update(accounts).set({ email: challenge.email, googleSubject: null, pendingCampusId: challenge.unitid, registrationTx: null }).where(eq(accounts.id, accountId));
     return true;
   }).catch(error => {
     if (error?.cause?.code === '23505') throw new TRPCError({ code: 'CONFLICT', message: 'Use a school email that is not already linked to Hunch.' });

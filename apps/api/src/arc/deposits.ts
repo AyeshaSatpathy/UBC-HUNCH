@@ -33,14 +33,17 @@ export async function submitDeposit(db: Database, account: typeof accounts.$infe
     }
     const [pending] = await tx.select({ id: deposits.id }).from(deposits).where(and(owned, eq(deposits.status, 'pending'))).limit(1);
     if (pending) throw new TRPCError({ code: 'CONFLICT', message: 'A deposit is already processing. Check Portfolio for its status.' });
-    if (input.card === '4242') {
+    if (input.card !== '4242' && input.card !== account.addedCard && input.card !== '0002') {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Add this card before using it.' });
+    }
+    if (input.card !== '0002') {
       const [recent] = await tx.select({ cents: sql<number>`coalesce(sum(${deposits.cents}), 0)::int` }).from(deposits).where(and(
         owned, eq(deposits.status, 'confirmed'), gte(deposits.createdAt, new Date(Date.now() - 86_400_000)),
       ));
       if (recent.cents + input.cents > 2500) throw new TRPCError({ code: 'BAD_REQUEST', message: 'You can add up to $25 in test funds every 24 hours.' });
       if (await available() < centsToUnits(input.cents)) throw new TRPCError({ code: 'BAD_REQUEST', message: 'This amount is unavailable. Choose a smaller deposit or try again later.' });
     }
-    const [created] = await tx.insert(deposits).values({ ...input, accountId: account.id, status: input.card === '4242' ? 'pending' : 'declined' }).returning();
+    const [created] = await tx.insert(deposits).values({ ...input, accountId: account.id, status: input.card === '0002' ? 'declined' : 'pending' }).returning();
     return receipt(created);
   });
 }
@@ -55,7 +58,7 @@ export async function depositHistory(db: Database, account: typeof accounts.$inf
       .where(and(eq(arcEvents.chainId, chainId), eq(arcEvents.contract, market), eq(arcEvents.name, 'Purchased'), eq(arcEvents.wallet, account.wallet)))
       .orderBy(desc(arcEvents.blockNumber), desc(arcEvents.logIndex)).limit(20) : [],
   ]);
-  return { enabled: testDepositsEnabled(), deposits: records.map(receipt), purchases: orders };
+  return { enabled: testDepositsEnabled(), addedCard: account.addedCard, deposits: records.map(receipt), purchases: orders };
 }
 
 export async function depositStatus(db: Database, accountId: string, id: string) {

@@ -29,6 +29,10 @@ test('deposits keep an owned receipt across retries, reject insufficient funds a
     await expect(depositStatus(db, randomUUID(), created.id)).rejects.toThrow('Deposit not found');
     expect(await depositStatus(db, account.id, created.id)).toEqual(created);
     await db.update(deposits).set({ status: 'confirmed' }).where(eq(deposits.id, created.id));
+    await expect(submitDeposit(db, account, { ...next, card: '1111', requestKey: randomUUID() }, funds)).rejects.toThrow('Add this card');
+    await db.update(accounts).set({ addedCard: '1111' }).where(eq(accounts.id, account.id));
+    const [withCard] = await db.select().from(accounts).where(eq(accounts.id, account.id));
+    expect((await depositHistory(db, withCard)).addedCard).toBe('1111');
     await expect(submitDeposit(db, account, { ...next, cents: 2500, requestKey: randomUUID() }, funds)).rejects.toThrow('up to $25');
     expect((await depositHistory(db, account)).deposits).toHaveLength(2);
   } finally {

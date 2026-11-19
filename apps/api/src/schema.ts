@@ -30,6 +30,8 @@ export const accounts = pgTable("accounts", {
   notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
   displayName: text("display_name"),
   passwordHash: text("password_hash"),
+  googleSubject: text("google_subject").unique(),
+  addedCard: text("added_card").$type<'1111' | '0002'>(),
   hasSeenGuide: boolean("has_seen_guide").notNull().default(false),
   isReviewer: boolean("is_reviewer").notNull().default(false),
   wallet: text("wallet").unique(),
@@ -74,6 +76,18 @@ export const sessions = pgTable("sessions", {
   accountId: uuid("account_id").notNull().references(() => accounts.id),
   expiresAt: date("expires_at").notNull(),
 });
+
+export const googleSignIns = pgTable("google_sign_ins", {
+  id: uuid("id").primaryKey(),
+  proofHash: text("proof_hash").notNull(),
+  verifier: text("verifier").notNull(),
+  intent: text("intent").$type<'login' | 'signup'>().notNull(),
+  requester: text("requester").notNull(),
+  expiresAt: date("expires_at").notNull(),
+  result: text("result").$type<'approved' | 'school-email' | 'account-missing' | 'cancelled' | 'failed'>(),
+  accountId: uuid("account_id").references(() => accounts.id, { onDelete: 'cascade' }),
+  consumedAt: date("consumed_at"),
+}, table => [index('google_sign_ins_requester_expiry_idx').on(table.requester, table.expiresAt), index('google_sign_ins_expiry_idx').on(table.expiresAt)]);
 
 export const savedMarkets = pgTable("saved_markets", {
   accountId: uuid("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
@@ -122,7 +136,7 @@ export const deposits = pgTable("deposits", {
   id: uuid("id").primaryKey().defaultRandom(),
   accountId: uuid("account_id").notNull().references(() => accounts.id),
   requestKey: text("request_key").notNull(),
-  card: text("card").$type<'4242' | '0002'>().notNull(),
+  card: text("card").$type<'4242' | '1111' | '0002'>().notNull(),
   cents: integer("cents").notNull(),
   status: text("status").$type<'pending' | 'confirmed' | 'declined' | 'failed'>().notNull(),
   circleId: text("circle_id").unique(),

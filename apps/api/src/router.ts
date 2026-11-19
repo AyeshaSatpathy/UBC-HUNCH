@@ -4,7 +4,8 @@ import { z } from "zod";
 import type { Database } from "./db";
 import { accounts, campuses, savedMarkets, sessions } from "./schema";
 import { beginVerification, confirmCampusChange, finishVerification, getSession, passwordLogin, schoolEmail } from "./auth/accounts";
-import { depositHistory, depositStatus, submitDeposit } from './arc/deposits';
+import { claimGoogleSignIn, startGoogleSignIn } from './auth/google';
+import { depositHistory, depositStatus, submitDeposit, testDepositsEnabled } from './arc/deposits';
 import { getMarket, listMarkets, listSavedMarkets, portfolio, previewClaim, quoteMarket } from "./arc/market-api";
 import { claimStatus, submitClaim } from "./arc/claims";
 import { advanceStudentOperation, pendingStudentOperations, startStudentOperation } from "./arc/student-operations";
@@ -41,6 +42,10 @@ export const appRouter = t.router({
   leaderboard: t.procedure.input(z.object({ campusId: campusId.optional() }))
     .query(({ ctx, input }) => leaderboard(ctx.db, input.campusId)),
   auth: t.router({
+    googleStart: t.procedure.input(z.object({ intent: z.enum(['login', 'signup']) }))
+      .mutation(({ ctx, input }) => startGoogleSignIn(ctx.db, input.intent, ctx.requester)),
+    googleStatus: t.procedure.input(z.object({ id: z.uuid(), proof: z.string().regex(/^[\w-]{43}$/) }))
+      .mutation(({ ctx, input }) => claimGoogleSignIn(ctx.db, input.id, input.proof)),
     settings: signedIn.query(({ ctx }) => ({
       email: ctx.session.account.email,
       hasPassword: !!ctx.session.account.passwordHash,
@@ -100,9 +105,14 @@ export const appRouter = t.router({
     }),
   }),
   deposits: t.router({
+    addCard: signedIn.input(z.object({ card: z.enum(['1111', '0002']) })).mutation(async ({ ctx, input }) => {
+      if (!testDepositsEnabled()) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Adding a card is unavailable.' });
+      await ctx.db.update(accounts).set({ addedCard: input.card }).where(eq(accounts.id, ctx.session.account.id));
+      return input;
+    }),
     history: signedIn.query(({ ctx }) => depositHistory(ctx.db, ctx.session.account)),
     status: signedIn.input(z.object({ id: z.uuid() })).query(({ ctx, input }) => depositStatus(ctx.db, ctx.session.account.id, input.id)),
-    confirm: signedIn.input(z.object({ requestKey, cents: z.union([z.literal(500), z.literal(1000), z.literal(2500)]), card: z.enum(['4242', '0002']) }))
+    confirm: signedIn.input(z.object({ requestKey, cents: z.union([z.literal(500), z.literal(1000), z.literal(2500)]), card: z.enum(['4242', '1111', '0002']) }))
       .mutation(({ ctx, input }) => submitDeposit(ctx.db, ctx.session.account, input)),
   }),
   markets: t.router({
