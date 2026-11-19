@@ -1,10 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
 import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { studentError, useSession } from '../api';
 import { GoogleSignIn } from '../google-sign-in';
-import { Button, ErrorNotice, Icon, Loading, Page, Sticker, Wordmark, c, s } from '../ui';
+import { Button, ErrorNotice, Icon, Loading, Page, Sticker, c, s } from '../ui';
 
 export default function Onboarding() {
   const { api, loading, signedIn, setSession } = useSession();
@@ -54,51 +55,99 @@ export default function Onboarding() {
   const reset = (next: typeof mode) => {
     if (next === mode) return;
     setSubmitted(false);
+    setShowPassword(false);
     setMode(next); setPassword(''); setCode(''); setChallenge(''); request.reset(); login.reset(); verify.reset();
   };
   const issue = verify.error ?? login.error ?? request.error;
-  return <Page>
-    <View style={[s.row, s.between]}><Wordmark />{!challenge && <Sticker size={64} />}</View>
-    {!challenge && <View style={s.segment}>
-      {(['login', 'signup'] as const).map(option => <Pressable key={option} accessibilityRole="tab" accessibilityState={{ selected: mode === option, disabled: busy }} disabled={busy}
-        onPress={() => reset(option)} style={[s.button, { flex: 1, minHeight: 44, backgroundColor: mode === option ? c.lilac : c.panel }]}>
-        <Text style={[s.buttonText, { color: mode === option ? c.bg : c.cream }]}>{option === 'login' ? 'Log in' : 'Sign up'}</Text>
-      </Pressable>)}
-    </View>}
-    <View style={{ gap: 12 }}>
-      {(challenge || mode === 'recover') && <>
-        <Text accessibilityRole="header" style={[s.heading, { fontSize: 26 }]}>{challenge ? 'One quick check' : 'Reset password'}</Text>
-        <Text style={s.muted}>{challenge ? 'Enter the six-digit code sent to ' + email.trim() + '.' : 'Verify your school email to reset your password.'}</Text>
-      </>}
-      {!challenge ? <>
-        {mode === 'signup' && <View style={s.field}><Text style={s.muted}>What should we call you?</Text><TextInput accessibilityLabel="Your name" value={name} onChangeText={setName} maxLength={40} placeholder="First name or nickname" placeholderTextColor={c.muted} style={s.input} autoComplete="given-name" />
-          {submitted && !!nameError && <Text accessibilityRole="alert" style={s.error}>{nameError}</Text>}
-        </View>}
-        <View style={s.field}><Text style={s.muted}>School email</Text><TextInput accessibilityLabel="School email" value={email} onChangeText={setEmail} placeholder="you@school.edu" placeholderTextColor={c.muted} style={s.input} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" />
-          {submitted && !!emailError && <Text accessibilityRole="alert" style={s.error}>{emailError}</Text>}
+  return <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
+    <Image source={require('../../assets/auth-wave.png')} accessible={false} resizeMode="stretch" style={styles.wave} />
+    <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+      <View style={styles.hero}>
+        <Text accessibilityLabel="Hunch" style={styles.wordmark}>hunch<Text style={{ color: c.lime }}>.</Text></Text>
+        {!challenge && <Sticker size={108} />}
+        <View style={styles.intro}>
+          <Text accessibilityRole="header" style={styles.heading}>{challenge ? 'One quick check' : mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Create an account' : 'Reset password'}</Text>
+          <Text style={styles.subtitle}>{challenge ? 'Enter the six-digit code sent to ' + email.trim() + '.' : mode === 'login' ? 'Sign in to your Hunch account.' : mode === 'signup' ? 'Join with your school email.' : 'Verify your school email.'}</Text>
         </View>
-        <View style={s.field}><Text style={s.muted}>{mode === 'login' ? 'Password' : 'Choose a password'}</Text>
-          <View style={{ position: 'relative' }}><TextInput accessibilityLabel="Password" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder={mode === 'login' ? 'Your password' : 'At least 12 characters'} placeholderTextColor={c.muted} maxLength={128} style={[s.input, { width: '100%', paddingRight: 56 }]} />
-            <Pressable accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} style={[s.iconButton, { position: 'absolute', right: 2, top: 2 }]} onPress={() => setShowPassword(!showPassword)}><Icon name={showPassword ? 'eye-off-outline' : 'eye-outline'} /></Pressable></View>
-          {submitted && !!passwordError ? <Text accessibilityRole="alert" style={s.error}>{passwordError}</Text> :
-            mode !== 'login' && <Text style={s.muted}>At least 12 characters.</Text>}
-        </View>
-        <Button label={request.isPending ? 'Sending code...' : login.isPending ? 'Logging in...' : mode === 'login' ? 'Log in' : 'Send verification code'} disabled={busy} onPress={submit} />
-        {mode === 'login' && <Pressable accessibilityRole="button" disabled={busy} onPress={() => reset('recover')} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-end' }}><Text style={[s.muted, { fontSize: 13, textDecorationLine: 'underline' }]}>Reset password</Text></Pressable>}
-        {mode !== 'recover' && <GoogleSignIn key={mode} intent={mode} disabled={busy} />}
-      </> : <>
-        <TextInput accessibilityLabel="Verification code" placeholder="000000" placeholderTextColor={c.muted} value={code} onChangeText={value => setCode(value.replace(/\D/g, ''))} maxLength={6} keyboardType="number-pad" autoComplete="one-time-code" style={[s.input, { fontSize: 28, letterSpacing: 8, textAlign: 'center' }]} />
-        <Button label={verify.isPending ? 'Verifying...' : mode === 'signup' ? 'Verify and join Hunch' : 'Save password and log in'} disabled={busy || code.length !== 6} onPress={() => verify.mutate()} />
-        <Text style={s.muted}>The code expires in 10 minutes. Check Spam if it has not arrived.</Text>
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy || cooldown > 0 }}
-          disabled={busy || cooldown > 0} onPress={() => request.mutate()}
-          style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: c.lime }}>
-            {request.isPending ? 'Sending…' : cooldown ? 'Resend in ' + cooldown + 's' : 'Resend code'}
-          </Text>
+      </View>
+      <View style={styles.form}>
+        {!challenge ? <>
+          {mode === 'signup' && <AuthField icon="person-outline" accessibilityLabel="Your name" placeholder="Your name" value={name}
+            onChangeText={setName} maxLength={40} autoComplete="given-name" error={submitted ? nameError : ''} />}
+          <AuthField icon="mail-outline" accessibilityLabel="School email" placeholder="School email" value={email}
+            onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" error={submitted ? emailError : ''} />
+          <AuthField icon="lock-closed-outline" accessibilityLabel="Password" placeholder={mode === 'recover' ? 'New password' : 'Password'}
+            value={password} onChangeText={setPassword} secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false}
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'} maxLength={128} error={submitted ? passwordError : ''}
+            visibility={{ visible: showPassword, toggle: () => setShowPassword(value => !value) }} />
+          {mode !== 'login' && !(submitted && passwordError) && <Text style={s.muted}>At least 12 characters.</Text>}
+          {mode === 'login' && <Pressable accessibilityRole="button" disabled={busy} onPress={() => reset('recover')} style={styles.forgot}>
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </Pressable>}
+          <Button label={request.isPending ? 'Sending code…' : login.isPending ? 'Logging in…' : mode === 'login' ? 'Log in' : 'Send verification code'} disabled={busy} onPress={submit} />
+          {mode !== 'recover' && <>
+            <View style={styles.divider}><View style={styles.rule} /><Text style={s.muted}>or</Text><View style={styles.rule} /></View>
+            <GoogleSignIn key={mode} intent={mode} disabled={busy} />
+          </>}
+        </> : <>
+          <TextInput accessibilityLabel="Verification code" placeholder="000000" placeholderTextColor={c.muted} value={code}
+            onChangeText={value => setCode(value.replace(/\D/g, ''))} maxLength={6} keyboardType="number-pad" autoComplete="one-time-code"
+            style={[s.input, { fontSize: 28, letterSpacing: 8, textAlign: 'center' }]} />
+          <Button label={verify.isPending ? 'Verifying…' : mode === 'signup' ? 'Verify and join Hunch' : 'Save password and log in'}
+            disabled={busy || code.length !== 6} onPress={() => verify.mutate()} />
+          <Text style={s.muted}>The code expires in 10 minutes. Check Spam if it has not arrived.</Text>
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy || cooldown > 0 }} disabled={busy || cooldown > 0}
+            onPress={() => request.mutate()} style={styles.resend}>
+            <Text style={styles.resendText}>{request.isPending ? 'Sending…' : cooldown ? 'Resend in ' + cooldown + 's' : 'Resend code'}</Text>
+          </Pressable>
+        </>}
+        {!!issue && <ErrorNotice>{studentError(issue, 'Could not continue. Check your connection and try again.')}</ErrorNotice>}
+      </View>
+      {!challenge && <View style={styles.footer}>
+        {mode !== 'recover' && <Text style={s.body}>{mode === 'login' ? 'New to Hunch?' : 'Already have an account?'}</Text>}
+        <Pressable accessibilityRole="link" disabled={busy} onPress={() => reset(mode === 'login' ? 'signup' : 'login')} style={styles.footerLink}>
+          <Text style={styles.link}>{mode === 'login' ? 'Create an account' : mode === 'signup' ? 'Log in' : 'Back to log in'}</Text>
         </Pressable>
-      </>}
-      {!!issue && <ErrorNotice>{studentError(issue, 'Could not continue. Check your connection and try again.')}</ErrorNotice>}
-    </View>
-  </Page>;
+      </View>}
+    </ScrollView>
+  </SafeAreaView>;
 }
+
+function AuthField({ icon, error, visibility, ...input }: TextInputProps & {
+  icon: 'person-outline' | 'mail-outline' | 'lock-closed-outline';
+  error: string;
+  visibility?: { visible: boolean; toggle: () => void };
+}) {
+  return <View style={s.field}>
+    <View style={styles.inputFrame}>
+      <Icon name={icon} color={c.cream} size={21} />
+      <TextInput {...input} placeholderTextColor={c.muted} style={styles.input} />
+      {visibility && <Pressable accessibilityRole="button" accessibilityLabel={visibility.visible ? 'Hide password' : 'Show password'}
+        onPress={visibility.toggle} style={s.iconButton}><Icon name={visibility.visible ? 'eye-off-outline' : 'eye-outline'} /></Pressable>}
+    </View>
+    {!!error && <Text accessibilityRole="alert" style={s.error}>{error}</Text>}
+  </View>;
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: c.bg },
+  wave: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: 66 },
+  content: { width: '100%', maxWidth: 460, alignSelf: 'center', paddingHorizontal: 24, paddingTop: 22, paddingBottom: 82, gap: 24 },
+  hero: { alignItems: 'center', gap: 14 },
+  wordmark: { ...s.heading, fontSize: 54, letterSpacing: -2.5, lineHeight: 58 },
+  intro: { alignItems: 'center', gap: 4 },
+  heading: { ...s.heading, fontSize: 32, textAlign: 'center' },
+  subtitle: { ...s.body, color: c.muted, textAlign: 'center' },
+  form: { gap: 11 },
+  inputFrame: { ...s.input, ...s.row, gap: 12, paddingVertical: 0, paddingRight: 5 },
+  input: { flex: 1, minWidth: 0, minHeight: 48, color: c.cream, fontSize: 16, paddingVertical: 0 },
+  forgot: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', marginTop: -5 },
+  forgotText: { ...s.body, fontSize: 14, textDecorationLine: 'underline' },
+  divider: { ...s.row, gap: 14, marginVertical: 6, marginHorizontal: 10 },
+  rule: { flex: 1, height: 1, backgroundColor: c.border },
+  footer: { ...s.row, justifyContent: 'center', flexWrap: 'wrap', marginTop: -9 },
+  footerLink: { minHeight: 44, justifyContent: 'center' },
+  link: { ...s.body, color: c.lilac, fontWeight: '700', textDecorationLine: 'underline' },
+  resend: { minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center' },
+  resendText: { color: c.lime, fontWeight: '700', fontSize: 12 },
+});

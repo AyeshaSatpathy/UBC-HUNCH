@@ -65,14 +65,13 @@ export function GoogleSignIn({ intent, disabled }: { intent: 'login' | 'signup';
     } finally { setStarting(false); }
   }
 
-  const label = intent === 'login' ? 'Log in with Google' : 'Sign up with Google';
   return <View style={{ gap: 8 }}>
-    <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={disabled || starting || !!attempt} onPress={() => void start()}
-      style={({ pressed }) => [s.row, { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: c.border, borderRadius: 12, opacity: pressed || starting ? 0.7 : 1 }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Continue with Google" disabled={disabled || starting || !!attempt} onPress={() => void start()}
+      style={({ pressed }) => [s.row, { minHeight: 48, justifyContent: 'center', borderWidth: 1, borderColor: c.border, borderRadius: 14, opacity: pressed || starting ? 0.7 : 1 }]}>
       <View style={{ width: 26, height: 26, borderRadius: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <Image source={require('../assets/google-g.png')} accessible={false} resizeMode="contain" style={{ width: 18, height: 18 }} />
       </View>
-      <Text style={{ color: c.cream, fontWeight: '500', fontSize: 14 }}>{starting ? 'Opening Google…' : label}</Text>
+      <Text style={{ color: c.cream, fontWeight: '500', fontSize: 16 }}>{starting ? 'Opening Google…' : 'Continue with Google'}</Text>
     </Pressable>
     {attempt && <View style={s.row}>
       <Text style={s.muted}>Finish in your browser, then return to Hunch.</Text>
